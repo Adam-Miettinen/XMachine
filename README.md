@@ -33,7 +33,7 @@ Its functionality is extensible with [components](https://github.com/Adam-Mietti
 
 XMachine was written by Adam Miettinen. It is my first _GitHub_ project.
 
-The library was developed and tested around one specific use case of mine, so you may find it lacking in other areas. Feel free to [open an issue](Issues) if you have any thoughts about how XMachine could be improved. Feel free also to fork the repository and let me know how any changes work out.
+The library was developed and tested around one specific use case of mine, so you may find it lacking in other areas. Feel free to [open an issue](https://github.com/Adam-Miettinen/XMachine/issues) if you have any thoughts about how XMachine could be improved. Feel free also to fork the repository and let me know how any changes work out.
 
 ## Related projects
 
