@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using XMachine.Reflection;
 
 namespace XMachine.Components
 {
@@ -10,8 +11,7 @@ namespace XMachine.Components
 	/// </summary>
 	public sealed class XTypeRules : XMachineComponent
 	{
-		private readonly IDictionary<Type, ICollection<MethodInfo>> staticRules =
-			new Dictionary<Type, ICollection<MethodInfo>>();
+		private readonly ICollection<MethodArgumentsMap> rules = new HashSet<MethodArgumentsMap>();
 
 		internal XTypeRules() { }
 
@@ -20,52 +20,11 @@ namespace XMachine.Components
 		/// </summary>
 		protected override void OnCreateXTypeLate<T>(XType<T> xType)
 		{
-			Type type = typeof(T);
+			object[] args = new object[] { xType };
 
-			// For type == T
-			// Match to: T
-
-			if (staticRules.TryGetValue(type, out ICollection<MethodInfo> typeRules))
+			foreach (MethodArgumentsMap rule in rules)
 			{
-				ApplyRules(xType, typeRules);
-			}
-
-			foreach (KeyValuePair<Type, ICollection<MethodInfo>> kv in staticRules)
-			{
-				// For type : BaseType
-				// Match to: T where T : BaseType
-
-				if (kv.Key.IsGenericParameter)
-				{
-					GenericParameterAttributes attributes = kv.Key.GenericParameterAttributes;
-
-					if ((!attributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint) || type.IsByRef) &&
-						(!attributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint) ||
-							(type.IsValueType && type.GetInterface(nameof(Nullable)) == null)) &&
-						(!attributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint) ||
-							type.GetConstructor(Type.EmptyTypes) != null) &&
-						kv.Key.GetGenericParameterConstraints().All(x => x.IsAssignableFrom(type)))
-					{
-						ApplyRules(xType, kv.Value.Select(x => x.MakeGenericMethod(type)));
-					}
-				}
-			}
-
-			// For type == GenericType<T> for some T
-			// Match to: GenericType<T>
-
-			if (type.IsConstructedGenericType)
-			{
-				Type genericTypeDef = type.GetGenericTypeDefinition();
-				Type[] genericArgs = type.GenericTypeArguments;
-
-				foreach (KeyValuePair<Type, ICollection<MethodInfo>> kv in staticRules)
-				{
-					if (kv.Key.IsGenericTypeDefinition && kv.Key == genericTypeDef)
-					{
-						ApplyRules(xType, kv.Value.Select(x => x.MakeGenericMethod(genericArgs)));
-					}
-				}
+				_ = rule.TryInvoke(null, args);
 			}
 		}
 
@@ -79,44 +38,29 @@ namespace XMachine.Components
 				return;
 			}
 
-			foreach (MethodInfo method in type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Static | BindingFlags.Public)
-				.Where(x => x.GetCustomAttribute<XTypeRuleAttribute>() != null &&
+			foreach (MethodInfo method in type
+				.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Static | BindingFlags.Public)
+				.Where(x => x.HasCustomAttribute<XTypeRuleAttribute>() &&
 					(!x.IsGenericMethod || x.IsGenericMethodDefinition) &&
 					!x.IsXIgnored() &&
 					x.ReturnType == typeof(void)))
 			{
-
 				ParameterInfo[] parameters = method.GetParameters();
 
-				if (!(parameters.Length == 1 &&
-					parameters[0].ParameterType.IsGenericType &&
-					parameters[0].ParameterType.GetGenericTypeDefinition() == typeof(XType<>)))
+				if (parameters.Length == 1 ||
+					parameters[0].ParameterType.IsGenericType ||
+					parameters[0].ParameterType.GetGenericTypeDefinition() == typeof(XType<>))
 				{
-					continue;
-				}
-
-				Type index = parameters[0].ParameterType.GenericTypeArguments[0];
-
-				if (staticRules.TryGetValue(index, out ICollection<MethodInfo> tRules))
-				{
-					tRules.Add(method);
-				}
-				else
-				{
-					tRules = new List<MethodInfo>
+					try
 					{
-						method
-					};
-					staticRules.Add(index, tRules);
+						rules.Add(new MethodArgumentsMap(method));
+					}
+					catch
+					{
+						// Method probably doesn't have a signature that allows discovery of the
+						// generic method arguments from the method parameters alone
+					}
 				}
-			}
-		}
-
-		private void ApplyRules<T>(XType<T> xType, IEnumerable<MethodInfo> rules)
-		{
-			foreach (MethodInfo method in rules)
-			{
-				_ = method.Invoke(null, new object[] { xType });
 			}
 		}
 	}

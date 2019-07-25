@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Xml.Serialization;
+using XMachine.Reflection;
 
 namespace XMachine.Components.Properties
 {

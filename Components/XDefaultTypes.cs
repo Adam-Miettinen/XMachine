@@ -51,70 +51,57 @@ namespace XMachine.Components
 
 		protected override void OnCreateDomain(XDomain domain)
 		{
-			XType<bool> xBool = domain.Reflect<bool>();
-			xBool.Register(new XTexter<bool>(x => XmlTools.ReadBool(x), (obj) => XmlTools.Write(obj)));
-			_ = domain.Reflect<bool[]>();
-
-			XType<byte> xByte = domain.Reflect<byte>();
-			xByte.Register(new XTexter<byte>(x => XmlTools.ReadByte(x), (obj) => XmlTools.Write(obj)));
-			_ = domain.Reflect<byte[]>();
-
-			XType<sbyte> xSByte = domain.Reflect<sbyte>();
-			xSByte.Register(new XTexter<sbyte>(x => XmlTools.ReadSByte(x), (obj) => XmlTools.Write(obj)));
-			_ = domain.Reflect<sbyte[]>();
-
-			XType<char> xChar = domain.Reflect<char>();
-			xChar.Register(new XTexter<char>(x => XmlTools.ReadChar(x), (obj) => XmlTools.Write(obj)));
-			_ = domain.Reflect<char[]>();
-
-			XType<decimal> xDecimal = domain.Reflect<decimal>();
-			xDecimal.Register(new XTexter<decimal>(x => XmlTools.ReadDecimal(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<decimal[]>();
-
-			XType<double> xDouble = domain.Reflect<double>();
-			xDouble.Register(new XTexter<double>(x => XmlTools.ReadDouble(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<double[]>();
-
-			XType<float> xFloat = domain.Reflect<float>();
-			xFloat.Register(new XTexter<float>(x => XmlTools.ReadFloat(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<float[]>();
-
-			XType<int> xInt = domain.Reflect<int>();
-			xInt.Register(new XTexter<int>(x => XmlTools.ReadInt(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<int[]>();
-
-			XType<uint> xUInt = domain.Reflect<uint>();
-			xUInt.Register(new XTexter<uint>(x => XmlTools.ReadUInt(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<uint[]>();
-
-			XType<long> xLong = domain.Reflect<long>();
-			xLong.Register(new XTexter<long>(x => XmlTools.ReadLong(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<long[]>();
-
-			XType<ulong> xULong = domain.Reflect<ulong>();
-			xULong.Register(new XTexter<ulong>(x => XmlTools.ReadULong(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<ulong[]>();
-
-			XType<short> xShort = domain.Reflect<short>();
-			xShort.Register(new XTexter<short>(x => XmlTools.ReadShort(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<short[]>();
-
-			XType<ushort> xUShort = domain.Reflect<ushort>();
-			xUShort.Register(new XTexter<ushort>(x => XmlTools.ReadUShort(x), x => XmlTools.Write(x)));
-			_ = domain.Reflect<ushort[]>();
-
-			XType<string> xString = domain.Reflect<string>();
-			xString.Register(new XTexter<string>(x => x, x => x));
+			// Write char, char[], and string as strings
+			domain.Reflect<char>().Register(new XTexter<char>(x => XmlTools.ReadChar(x), (obj) => XmlTools.Write(obj)));
+			domain.Reflect<char[]>().Register(new XTexter<char[]>(x => x.ToCharArray(), (obj) => new string(obj)));
+			domain.Reflect<string>().Register(new XTexter<string>(x => x, x => x));
 			_ = domain.Reflect<string[]>();
 
-			XType<DateTime> xDateTime = domain.Reflect<DateTime>();
-			xDateTime.Register(new XTexter<DateTime>(x => XmlTools.ReadDateTime(x), x => XmlTools.Write(x)));
+			// Write bools as case-insensitive true/false
+			domain.Reflect<bool>().Register(new XTexter<bool>(x => XmlTools.ReadBool(x), (obj) => XmlTools.Write(obj)));
+			_ = domain.Reflect<bool[]>();
 
-			XType<Version> xVersion = domain.Reflect<Version>();
-			xVersion.Register(new XTexter<Version>(x => XmlTools.ReadVersion(x), x => XmlTools.Write(x)));
+			// Numbers be numbers
+			domain.Reflect<byte>().Register(new XTexter<byte>(x => XmlTools.ReadByte(x), (obj) => XmlTools.Write(obj)));
+			_ = domain.Reflect<byte[]>();
 
-			XType<BigInteger> xBigInteger = domain.Reflect<BigInteger>();
-			xBigInteger.Register(new XTexter<BigInteger>(x => XmlTools.ReadBigInteger(x), x => XmlTools.Write(x)));
+			domain.Reflect<sbyte>().Register(new XTexter<sbyte>(x => XmlTools.ReadSByte(x), (obj) => XmlTools.Write(obj)));
+			_ = domain.Reflect<sbyte[]>();
+
+			domain.Reflect<decimal>().Register(new XTexter<decimal>(x => XmlTools.ReadDecimal(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<decimal[]>();
+
+			domain.Reflect<double>().Register(new XTexter<double>(x => XmlTools.ReadDouble(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<double[]>();
+
+			domain.Reflect<float>().Register(new XTexter<float>(x => XmlTools.ReadFloat(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<float[]>();
+
+			domain.Reflect<int>().Register(new XTexter<int>(x => XmlTools.ReadInt(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<int[]>();
+
+			domain.Reflect<uint>().Register(new XTexter<uint>(x => XmlTools.ReadUInt(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<uint[]>();
+
+			domain.Reflect<long>().Register(new XTexter<long>(x => XmlTools.ReadLong(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<long[]>();
+
+			domain.Reflect<ulong>().Register(new XTexter<ulong>(x => XmlTools.ReadULong(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<ulong[]>();
+
+			domain.Reflect<short>().Register(new XTexter<short>(x => XmlTools.ReadShort(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<short[]>();
+
+			domain.Reflect<ushort>().Register(new XTexter<ushort>(x => XmlTools.ReadUShort(x), x => XmlTools.Write(x)));
+			_ = domain.Reflect<ushort[]>();
+
+			// Other common texter types
+
+			domain.Reflect<DateTime>().Register(new XTexter<DateTime>(x => XmlTools.ReadDateTime(x), x => XmlTools.Write(x)));
+
+			domain.Reflect<Version>().Register(new XTexter<Version>(x => XmlTools.ReadVersion(x), x => XmlTools.Write(x)));
+
+			domain.Reflect<BigInteger>().Register(new XTexter<BigInteger>(x => XmlTools.ReadBigInteger(x), x => XmlTools.Write(x)));
 		}
 
 		protected override void OnCreateXType<T>(XType<T> xType)
@@ -125,7 +112,7 @@ namespace XMachine.Components
 
 			if (type.IsEnum)
 			{
-				xType.Register(new XTexter<T>(x => (T)Enum.Parse(type, x)));
+				xType.Register(new XTexter<T>(x => (T)Enum.Parse(typeof(T), x)));
 				return;
 			}
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Xml.Linq;
+using XMachine.Reflection;
 
 namespace XMachine.Components.Properties
 {
@@ -14,17 +15,17 @@ namespace XMachine.Components.Properties
 	{
 		private static readonly object placeHolder = new object();
 
-		private readonly IDictionary<XName, XPropertyBox<TType>> properties =
-			new Dictionary<XName, XPropertyBox<TType>>();
-
-		private XName[] constructWith;
-
-		private Func<IDictionary<XName, object>, TType> constructor;
-
 		/// <summary>
 		/// An optional predicate affecting all properties.
 		/// </summary>
 		public Predicate<TType> WriteIf { get; set; }
+
+		internal IDictionary<XName, XPropertyBox<TType>> Properties { get; } = 
+			new Dictionary<XName, XPropertyBox<TType>>();
+
+		internal XName[] ConstructWithNames { get; set; }
+
+		internal Func<IDictionary<XName, object>, TType> ConstructorMethod { get; set; }
 
 		/// <summary>
 		/// Add a new property of the given type, represented by an <see cref="XProperty{TType, TProperty}"/>
@@ -40,11 +41,11 @@ namespace XMachine.Components.Properties
 			{
 				throw new ArgumentException("Property must have a valid XName");
 			}
-			if (properties.ContainsKey(property.Name))
+			if (Properties.ContainsKey(property.Name))
 			{
 				throw new ArgumentException($"Component already has a property with XName {property.Name}.");
 			}
-			properties.Add(property.Name, XPropertyBox<TType>.Box(property));
+			Properties.Add(property.Name, XPropertyBox<TType>.Box(property));
 		}
 
 		/// <summary>
@@ -54,10 +55,10 @@ namespace XMachine.Components.Properties
 		{
 			if (property != null &&
 				property.Name != null &&
-				properties.TryGetValue(property.Name, out XPropertyBox<TType> existing) &&
+				Properties.TryGetValue(property.Name, out XPropertyBox<TType> existing) &&
 				Equals(property, XPropertyBox<TType>.Unbox<TProperty>(existing)))
 			{
-				_ = properties.Remove(property.Name);
+				_ = Properties.Remove(property.Name);
 			}
 		}
 
@@ -70,7 +71,7 @@ namespace XMachine.Components.Properties
 			{
 				throw new ArgumentNullException("XName cannot be null");
 			}
-			_ = properties.Remove(propertyName);
+			_ = Properties.Remove(propertyName);
 		}
 
 		/// <summary>
@@ -82,7 +83,7 @@ namespace XMachine.Components.Properties
 			{
 				throw new ArgumentNullException("XName cannot be null");
 			}
-			return properties.TryGetValue(name, out XPropertyBox<TType> value)
+			return Properties.TryGetValue(name, out XPropertyBox<TType> value)
 				? XPropertyBox<TType>.Unbox<TProperty>(value)
 				: null;
 		}
@@ -93,11 +94,11 @@ namespace XMachine.Components.Properties
 		/// </summary>
 		public XProperty<TType, TProperty> Get<TProperty>(Expression<Func<TType, TProperty>> expression)
 		{
-			MemberInfo mi = ReflectionTools.ParseMemberExpression(expression);
+			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(expression);
 			
 			if (mi != null)
 			{
-				if (properties.TryGetValue(mi.GetXmlNameFromAttributes() ?? mi.Name, out XPropertyBox<TType> value))
+				if (Properties.TryGetValue(mi.GetXmlNameFromAttributes() ?? mi.Name, out XPropertyBox<TType> value))
 				{
 					XProperty<TType, TProperty> property = XPropertyBox<TType>.Unbox<TProperty>(value);
 					if (property != null)
@@ -117,8 +118,8 @@ namespace XMachine.Components.Properties
 		/// </summary>
 		public void ConstructWith()
 		{
-			constructWith = null;
-			constructor = null;
+			ConstructWithNames = null;
+			ConstructorMethod = null;
 		}
 
 		/// <summary>
@@ -148,7 +149,7 @@ namespace XMachine.Components.Properties
 		{
 			XName arg1 = property1?.Name;
 			if (arg1 == null ||
-				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -180,8 +181,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			constructWith = new XName[] { property1 };
-			this.constructor = (args) => constructor((TArg1)args[property1]);
+			ConstructWithNames = new XName[] { property1 };
+			this.ConstructorMethod = (args) => constructor((TArg1)args[property1]);
 		}
 
 		/// <summary>
@@ -213,10 +214,10 @@ namespace XMachine.Components.Properties
 		{
 			XName arg1 = property1?.Name, arg2 = property2?.Name;
 			if (arg1 == null ||
-				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing) ||
 				arg2 == null ||
-				!properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
+				!Properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
 				property2 != XPropertyBox<TType>.Unbox<TArg2>(arg2Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -250,8 +251,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			constructWith = new XName[] { property1, property2 };
-			this.constructor = (args) => constructor((TArg1)args[property1], (TArg2)args[property2]);
+			ConstructWithNames = new XName[] { property1, property2 };
+			this.ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2]);
 		}
 
 		/// <summary>
@@ -288,13 +289,13 @@ namespace XMachine.Components.Properties
 		{
 			XName arg1 = property1?.Name, arg2 = property2?.Name, arg3 = property3?.Name;
 			if (arg1 == null ||
-				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing) ||
 				arg2 == null ||
-				!properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
+				!Properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
 				property2 != XPropertyBox<TType>.Unbox<TArg2>(arg2Existing) ||
 				arg3 == null ||
-				!properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
+				!Properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
 				property3 != XPropertyBox<TType>.Unbox<TArg3>(arg3Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -331,8 +332,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			constructWith = new XName[] { property1, property2, property3 };
-			this.constructor = (args) => constructor((TArg1)args[property1], (TArg2)args[property2], (TArg3)args[property3]);
+			ConstructWithNames = new XName[] { property1, property2, property3 };
+			this.ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2], (TArg3)args[property3]);
 		}
 
 		/// <summary>
@@ -372,16 +373,16 @@ namespace XMachine.Components.Properties
 		{
 			XName arg1 = property1?.Name, arg2 = property2?.Name, arg3 = property3?.Name, arg4 = property4?.Name;
 			if (arg1 == null ||
-				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing) ||
 				arg2 == null ||
-				!properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
+				!Properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
 				property2 != XPropertyBox<TType>.Unbox<TArg2>(arg2Existing) ||
 				arg3 == null ||
-				!properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
+				!Properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
 				property3 != XPropertyBox<TType>.Unbox<TArg3>(arg3Existing) ||
 				arg4 == null ||
-				!properties.TryGetValue(arg4, out XPropertyBox<TType> arg4Existing) ||
+				!Properties.TryGetValue(arg4, out XPropertyBox<TType> arg4Existing) ||
 				property4 != XPropertyBox<TType>.Unbox<TArg4>(arg4Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -420,8 +421,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			constructWith = new XName[] { property1, property2, property3, property4 };
-			this.constructor = (args) => constructor((TArg1)args[property1], (TArg2)args[property2],
+			ConstructWithNames = new XName[] { property1, property2, property3, property4 };
+			this.ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2],
 				(TArg3)args[property3], (TArg4)args[property4]);
 		}
 
@@ -434,7 +435,7 @@ namespace XMachine.Components.Properties
 
 			int toSet = 0;
 
-			foreach (XPropertyBox<TType> textProperty in properties.Values
+			foreach (XPropertyBox<TType> textProperty in Properties.Values
 				.Where(x => x.WriteAs == PropertyWriteMode.Text))
 			{
 				propertyValues.Add(textProperty.Name, placeHolder);
@@ -449,7 +450,7 @@ namespace XMachine.Components.Properties
 
 			foreach (XAttribute attribute in element.Attributes())
 			{
-				if (properties.TryGetValue(attribute.Name, out XPropertyBox<TType> property))
+				if (Properties.TryGetValue(attribute.Name, out XPropertyBox<TType> property))
 				{
 					propertyValues.Add(property.Name, placeHolder);
 					toSet++;
@@ -464,7 +465,7 @@ namespace XMachine.Components.Properties
 
 			foreach (XElement subElement in element.Elements())
 			{
-				if (properties.TryGetValue(subElement.Name, out XPropertyBox<TType> property))
+				if (Properties.TryGetValue(subElement.Name, out XPropertyBox<TType> property))
 				{
 					propertyValues.Add(property.Name, placeHolder);
 					toSet++;
@@ -480,11 +481,11 @@ namespace XMachine.Components.Properties
 
 			// With constructor
 
-			if (constructWith != null)
+			if (ConstructWithNames != null)
 			{
 				// Use default values if constructor parameters weren't found in XML
 
-				foreach (XName cwName in constructWith)
+				foreach (XName cwName in ConstructWithNames)
 				{
 					if (!propertyValues.ContainsKey(cwName))
 					{
@@ -496,15 +497,15 @@ namespace XMachine.Components.Properties
 
 				objectBuilder.AddTask(() =>
 				{
-					if (!constructWith.Any(x => propertyValues[x] == placeHolder))
+					if (!ConstructWithNames.Any(x => propertyValues[x] == placeHolder))
 					{
 						try
 						{
-							objectBuilder.Object = constructor(propertyValues);
+							objectBuilder.Object = ConstructorMethod(propertyValues);
 						}
 						finally
 						{
-							foreach (XName cw in constructWith)
+							foreach (XName cw in ConstructWithNames)
 							{
 								_ = propertyValues.Remove(cw);
 								toSet--;
@@ -529,7 +530,7 @@ namespace XMachine.Components.Properties
 					{
 						try
 						{
-							properties[ppty].Set(objectBuilder.Object, propertyValues[ppty]);
+							Properties[ppty].Set(objectBuilder.Object, propertyValues[ppty]);
 						}
 						finally
 						{
@@ -553,7 +554,7 @@ namespace XMachine.Components.Properties
 				return false;
 			}
 
-			foreach (XPropertyBox<TType> property in properties.Values)
+			foreach (XPropertyBox<TType> property in Properties.Values)
 			{
 				if (property.WriteIf?.Invoke(obj) == false)
 				{

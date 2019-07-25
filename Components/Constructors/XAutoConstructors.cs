@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
+using XMachine.Reflection;
 
 namespace XMachine.Components.Constructors
 {
@@ -34,23 +35,12 @@ namespace XMachine.Components.Constructors
 
 			Type type = typeof(T);
 
-			if (!type.CanCreateInstances() || type.IsArray || XDefaultTypes.IsDefaultType(type) ||
-				xType.Component<XTexter<T>>() != null || xType.Component<XBuilderComponent<T>>() != null)
+			if (!ConstructorEligible(xType))
 			{
 				return;
 			}
 
-			ConstructorAccess ctorAccess;
-
-			if (type.Assembly == typeof(object).Assembly)
-			{
-				ctorAccess = ConstructorAccess.Public;
-			}
-			else
-			{
-				XMachineAssemblyAttribute xma = type.Assembly.GetCustomAttribute<XMachineAssemblyAttribute>();
-				ctorAccess = xma == null ? AccessIncluded : xma.ConstructorAccess;
-			}
+			ConstructorAccess ctorAccess = GetAccessLevel<T>();
 
 			if (type.GetConstructor(Type.EmptyTypes) != null)
 			{
@@ -85,7 +75,33 @@ namespace XMachine.Components.Constructors
 			if (xType.Components<XTexter<T>>().Any(x => x.Enabled) ||
 				xType.Components<XBuilderComponent<T>>().Any(x => x.Enabled))
 			{
-				xType.Component<XConstructor<T>>().Enabled = false;
+				XConstructor<T> ctor = xType.Component<XConstructor<T>>();
+				if (ctor != null)
+				{
+					ctor.Enabled = false;
+				}
+			}
+		}
+
+		internal bool ConstructorEligible<T>(XType<T> xType)
+		{
+			Type type = typeof(T);
+
+			return type.CanCreateInstances() && !type.IsArray && !XDefaultTypes.IsDefaultType(type) &&
+				xType.Component<XTexter<T>>() == null && xType.Component<XBuilderComponent<T>>() == null;
+		}
+
+		internal ConstructorAccess GetAccessLevel<T>()
+		{
+			Type type = typeof(T);
+			if (type.Assembly == typeof(object).Assembly)
+			{
+				return ConstructorAccess.Public;
+			}
+			else
+			{
+				XMachineAssemblyAttribute xma = type.Assembly.GetCustomAttribute<XMachineAssemblyAttribute>();
+				return xma == null ? AccessIncluded : xma.ConstructorAccess;
 			}
 		}
 

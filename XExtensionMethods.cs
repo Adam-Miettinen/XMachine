@@ -3,12 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Xml.Linq;
 using XMachine.Components;
 using XMachine.Components.Collections;
 using XMachine.Components.Constructors;
 using XMachine.Components.Identifiers;
 using XMachine.Components.Properties;
+using XMachine.Reflection;
 
 namespace XMachine
 {
@@ -106,6 +108,43 @@ namespace XMachine
 				name: name ?? throw new ArgumentNullException(nameof(name)),
 				get: get ?? throw new ArgumentNullException(nameof(get)),
 				set: set);
+			xType.Component<XProperties<TType>>().Add(property);
+			return property;
+		}
+
+		/// <summary>
+		/// Creates a property representing the class member (a field or property) identified in <paramref name="memberExpression"/>.
+		/// This method can be used to add properties that represent members not automatically recognized, such as fields and
+		/// nonpublic properties.
+		/// </summary>
+		public static XProperty<TType, TProperty> AddProperty<TType, TProperty>(this XType<TType> xType, 
+			Expression<Func<TType, TProperty>> memberExpression, Action<TType, TProperty> set = null)
+		{
+			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(memberExpression);
+			XProperty<TType, TProperty> property;
+
+			if (set != null)
+			{
+				property = new XDelegateProperty<TType, TProperty>(
+					name: mi.Name,
+					get: memberExpression.Compile(),
+					set: set);
+			}
+			else if (mi is FieldInfo fi)
+			{
+				property = new XDelegateProperty<TType, TProperty>(
+					name: mi.Name,
+					get: memberExpression.Compile(),
+					set: (obj, value) => fi.SetValue(obj, value));
+			}
+			else
+			{
+				property = new XDelegateProperty<TType, TProperty>(
+					name: mi.Name,
+					get: memberExpression.Compile(),
+					set: (obj, value) => ((PropertyInfo)mi).SetValue(obj, value));
+			}
+			
 			xType.Component<XProperties<TType>>().Add(property);
 			return property;
 		}

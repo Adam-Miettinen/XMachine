@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
 using XMachine.Components.Properties;
+using XMachine.Reflection;
 
 namespace XMachine.Components.Collections
 {
@@ -229,7 +230,11 @@ namespace XMachine.Components.Collections
 			if (xType.Components<XTexter<T>>().Any(x => x.Enabled) ||
 				xType.Components<XBuilderComponent<T>>().Any(x => x.Enabled))
 			{
-				xType.Component<XCollection<T>>().Enabled = false;
+				XCollection<T> collection = xType.Component<XCollection<T>>();
+				if (collection != null)
+				{
+					collection.Enabled = false;
+				}
 			}
 
 			Type type = typeof(T);
@@ -242,10 +247,6 @@ namespace XMachine.Components.Collections
 			{
 				_ = dictionaryConstructor.MakeGenericMethod(typeArgs).Invoke(this, new object[] { xType });
 			}
-
-			// ReadOnlyCollection<,> constructor
-
-
 		}
 
 		private void DictionaryConstructor<TKey, TValue>(XType<Dictionary<TKey, TValue>> xType)
