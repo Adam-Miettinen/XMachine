@@ -5,7 +5,7 @@ XMachine offers an alternative to the default `System.Xml.Serialization` namespa
 
 ## Getting started
 
-Visit the [wiki](Wiki) to learn about the methods and classes available in XMachine. For most applications, you will only need to interact with a few of the methods in the static `XmlTools` class.
+Visit the [wiki](https://github.com/Adam-Miettinen/XMachine/wiki) to learn about the methods and classes available in XMachine. For most applications, you will only need to interact with a few of the methods in the static `XmlTools` class.
 
 To start programming with XMachine, download and build the source files, then add the built assembly to your project dependencies. XMachine itself has no external dependencies except for .NET Standard 2.0, which is implemented by .NET Core 2.0, .NET Framework 4.6.1 and Mono 5.4. (It might also work with older versions of .NET Standard; let me know how it goes if you try.)
 
@@ -27,7 +27,7 @@ XMachine expands on the built-in serializer in several ways:
 * XMachine does not use reflection emit or dynamic assemblies, so it must be run in a trust environment that has reflection permissions enabled.
 * It does not support encryption/decryption.
 
-Its functionality is extensible with [components](Wiki/Components), making it relatively easy to add features as needed.
+Its functionality is extensible with [components](https://github.com/Adam-Miettinen/XMachine/wiki/Components), making it relatively easy to add features as needed.
 
 ## Contributing
 
