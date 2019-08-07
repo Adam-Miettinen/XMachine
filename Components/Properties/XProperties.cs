@@ -20,7 +20,7 @@ namespace XMachine.Components.Properties
 		/// </summary>
 		public Predicate<TType> WriteIf { get; set; }
 
-		internal IDictionary<XName, XPropertyBox<TType>> Properties { get; } = 
+		internal IDictionary<XName, XPropertyBox<TType>> Properties { get; } =
 			new Dictionary<XName, XPropertyBox<TType>>();
 
 		internal XName[] ConstructWithNames { get; set; }
@@ -95,7 +95,7 @@ namespace XMachine.Components.Properties
 		public XProperty<TType, TProperty> Get<TProperty>(Expression<Func<TType, TProperty>> expression)
 		{
 			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(expression);
-			
+
 			if (mi != null)
 			{
 				if (Properties.TryGetValue(mi.GetXmlNameFromAttributes() ?? mi.Name, out XPropertyBox<TType> value))
@@ -109,7 +109,7 @@ namespace XMachine.Components.Properties
 			}
 
 			throw new ArgumentException(
-				$"Expression {expression} does not define an {nameof(XProperty<TType,TProperty>)} on {nameof(XProperties<TType>)}",
+				$"Expression {expression} does not define an {nameof(XProperty<TType, TProperty>)} on {nameof(XProperties<TType>)}",
 				nameof(expression));
 		}
 
@@ -182,7 +182,7 @@ namespace XMachine.Components.Properties
 			}
 
 			ConstructWithNames = new XName[] { property1 };
-			this.ConstructorMethod = (args) => constructor((TArg1)args[property1]);
+			ConstructorMethod = (args) => constructor((TArg1)args[property1]);
 		}
 
 		/// <summary>
@@ -252,7 +252,7 @@ namespace XMachine.Components.Properties
 			}
 
 			ConstructWithNames = new XName[] { property1, property2 };
-			this.ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2]);
+			ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2]);
 		}
 
 		/// <summary>
@@ -333,7 +333,7 @@ namespace XMachine.Components.Properties
 			}
 
 			ConstructWithNames = new XName[] { property1, property2, property3 };
-			this.ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2], (TArg3)args[property3]);
+			ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2], (TArg3)args[property3]);
 		}
 
 		/// <summary>
@@ -422,7 +422,7 @@ namespace XMachine.Components.Properties
 			}
 
 			ConstructWithNames = new XName[] { property1, property2, property3, property4 };
-			this.ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2],
+			ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2],
 				(TArg3)args[property3], (TArg4)args[property4]);
 		}
 
@@ -433,13 +433,10 @@ namespace XMachine.Components.Properties
 		{
 			IDictionary<XName, object> propertyValues = new Dictionary<XName, object>();
 
-			int toSet = 0;
-
 			foreach (XPropertyBox<TType> textProperty in Properties.Values
 				.Where(x => x.WriteAs == PropertyWriteMode.Text))
 			{
 				propertyValues.Add(textProperty.Name, placeHolder);
-				toSet++;
 				reader.Read(element, textProperty.PropertyType, x =>
 				{
 					propertyValues[textProperty.Name] = x;
@@ -450,10 +447,10 @@ namespace XMachine.Components.Properties
 
 			foreach (XAttribute attribute in element.Attributes())
 			{
-				if (Properties.TryGetValue(attribute.Name, out XPropertyBox<TType> property))
+				if (Properties.TryGetValue(attribute.Name, out XPropertyBox<TType> property) &&
+					!propertyValues.ContainsKey(property.Name))
 				{
 					propertyValues.Add(property.Name, placeHolder);
-					toSet++;
 
 					reader.Read(attribute, property.PropertyType, x =>
 					{
@@ -465,11 +462,11 @@ namespace XMachine.Components.Properties
 
 			foreach (XElement subElement in element.Elements())
 			{
-				if (Properties.TryGetValue(subElement.Name, out XPropertyBox<TType> property))
+				if (Properties.TryGetValue(subElement.Name, out XPropertyBox<TType> property) &&
+					!propertyValues.ContainsKey(property.Name))
 				{
 					propertyValues.Add(property.Name, placeHolder);
-					toSet++;
-						
+
 					reader.Read(subElement, property.PropertyType, x =>
 					{
 						propertyValues[property.Name] = x;
@@ -479,7 +476,12 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			// With constructor
+			if (propertyValues.Count == 0)
+			{
+				return;
+			}
+
+			// With parameterized constructor
 
 			if (ConstructWithNames != null)
 			{
@@ -495,9 +497,9 @@ namespace XMachine.Components.Properties
 
 				// Schedule construction when ready
 
-				objectBuilder.AddTask(() =>
+				reader.AddTask(this, () =>
 				{
-					if (!ConstructWithNames.Any(x => propertyValues[x] == placeHolder))
+					if (ConstructWithNames.All(x => !ReferenceEquals(propertyValues[x], placeHolder)))
 					{
 						try
 						{
@@ -508,7 +510,6 @@ namespace XMachine.Components.Properties
 							foreach (XName cw in ConstructWithNames)
 							{
 								_ = propertyValues.Remove(cw);
-								toSet--;
 							}
 						}
 
@@ -518,27 +519,39 @@ namespace XMachine.Components.Properties
 				});
 			}
 
-			// Task to set properties
+			// Add a task to set property values once constructed
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
 				if (objectBuilder.IsConstructed)
 				{
-					XName[] keysToSet = propertyValues.Keys.ToArray();
-
-					foreach (XName ppty in keysToSet)
+					if (propertyValues.Count > 0)
 					{
-						try
+						XName[] keysToSet = new XName[propertyValues.Count];
+						propertyValues.Keys.CopyTo(keysToSet, 0);
+
+						foreach (XName ppty in keysToSet)
 						{
-							Properties[ppty].Set(objectBuilder.Object, propertyValues[ppty]);
+							object value = propertyValues[ppty];
+							if (!ReferenceEquals(value, placeHolder))
+							{
+								try
+								{
+									Properties[ppty].Set(objectBuilder.Object, value);
+								}
+								finally
+								{
+									_ = propertyValues.Remove(ppty);
+								}
+							}
 						}
-						finally
-						{
-							_ = propertyValues.Remove(ppty);
-							toSet--;
-						}
+
+						return propertyValues.Count == 0;
 					}
-					return toSet == 0;
+					else
+					{
+						return true;
+					}
 				}
 				return false;
 			});
@@ -561,9 +574,11 @@ namespace XMachine.Components.Properties
 					continue;
 				}
 
+				object value = property.Get(obj);
+
 				if (property.WriteAs == PropertyWriteMode.Attribute)
 				{
-					XAttribute propertyAttribute = writer.WriteAttribute(property.Get(obj), property.Name);
+					XAttribute propertyAttribute = writer.WriteAttribute(value, property.Name);
 					if (propertyAttribute != null)
 					{
 						element.Add(propertyAttribute);
@@ -571,11 +586,11 @@ namespace XMachine.Components.Properties
 				}
 				else if (property.WriteAs == PropertyWriteMode.Text)
 				{
-					_ = writer.WriteTo(element, property.Get(obj), property.PropertyType);
+					_ = writer.WriteTo(element, value, property.PropertyType);
 				}
 				else
 				{
-					element.Add(writer.WriteTo(new XElement(property.Name), property.Get(obj), property.PropertyType));
+					element.Add(writer.WriteTo(new XElement(property.Name), value, property.PropertyType));
 				}
 			}
 

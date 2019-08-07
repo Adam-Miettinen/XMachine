@@ -3,7 +3,7 @@ using System.Xml.Linq;
 
 namespace XMachine.Components.Collections
 {
-	internal sealed class XDictionaryEntry : XTypeComponent<DictionaryEntry>
+	internal sealed class XDictionaryEntry : XBuilder<DictionaryEntry>
 	{
 		internal XDictionaryEntry() { }
 
@@ -44,7 +44,7 @@ namespace XMachine.Components.Collections
 				foundValue = true;
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
 				if (foundKey && foundValue)
 				{

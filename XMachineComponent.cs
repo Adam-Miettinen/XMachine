@@ -9,12 +9,24 @@ namespace XMachine
 	/// then given the opportunity to modify <see cref="XDomain"/>, <see cref="XReader"/>, 
 	/// <see cref="XWriter"/> and <see cref="XType{TType}"/> objects as they are instantiated.
 	/// </summary>
-	public abstract class XMachineComponent : IXComponent
+	public abstract class XMachineComponent : IXComponent, IExceptionHandler
 	{
+		private Action<Exception> exceptionHandler;
+
 		/// <summary>
 		/// Whether the component is enabled.
 		/// </summary>
 		public bool Enabled { get; set; } = true;
+
+		/// <summary>
+		/// A delegate that handles exceptions thrown by this <see cref="XMachineComponent"/>. By default, it will use
+		/// <see cref="XComponents.ExceptionHandler"/>.
+		/// </summary>
+		public Action<Exception> ExceptionHandler
+		{
+			get => exceptionHandler ?? XComponents.ExceptionHandler;
+			set => exceptionHandler = value;
+		}
 
 		/// <summary>
 		/// Called when <see cref="XMachine"/> is initialized and scans <see cref="Type"/> objects from assemblies

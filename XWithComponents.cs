@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using XMachine.Components;
 
 namespace XMachine
 {
@@ -131,7 +132,7 @@ namespace XMachine
 					}
 					catch (Exception e)
 					{
-						ExceptionHandler(e);
+						ExceptionHandler(new ComponentException(enumerator.Current, e));
 					}
 
 				}
@@ -158,7 +159,7 @@ namespace XMachine
 					}
 					catch (Exception e)
 					{
-						ExceptionHandler(e);
+						ExceptionHandler(new ComponentException(enumerator.Current, e));
 						continue;
 					}
 					yield return result;
@@ -192,7 +193,7 @@ namespace XMachine
 					}
 					catch (Exception e)
 					{
-						ExceptionHandler(e);
+						ExceptionHandler(new ComponentException(enumerator.Current, e));
 					}
 				}
 			}
@@ -225,7 +226,7 @@ namespace XMachine
 					}
 					catch (Exception e)
 					{
-						ExceptionHandler(e);
+						ExceptionHandler(new ComponentException(enumerator.Current, e));
 					}
 				}
 			}

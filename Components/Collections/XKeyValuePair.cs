@@ -3,7 +3,7 @@ using System.Xml.Linq;
 
 namespace XMachine.Components.Collections
 {
-	internal sealed class XKeyValuePair<TKey, TValue> : XTypeComponent<KeyValuePair<TKey, TValue>>
+	internal sealed class XKeyValuePair<TKey, TValue> : XBuilder<KeyValuePair<TKey, TValue>>
 	{
 		internal XKeyValuePair() { }
 
@@ -24,28 +24,28 @@ namespace XMachine.Components.Collections
 			TValue value = default;
 
 			reader.Read<TKey>(keyElement, x =>
-				{
-					key = x;
-					return foundKey = true;
-				},
-				ReaderHints.IgnoreElementName);
+			{
+				key = x;
+				return foundKey = true;
+			},
+			ReaderHints.IgnoreElementName);
 
 			XElement valueElement = element.Element(valueName);
 			if (valueElement != null)
 			{
 				reader.Read<TValue>(valueElement, x =>
-					{
-						value = x;
-						return foundValue = true;
-					},
-					ReaderHints.IgnoreElementName);
+				{
+					value = x;
+					return foundValue = true;
+				},
+				ReaderHints.IgnoreElementName);
 			}
 			else
 			{
 				foundValue = true;
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
 				if (foundKey && foundValue)
 				{

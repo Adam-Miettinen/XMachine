@@ -14,9 +14,7 @@ namespace XMachine.Components.Collections
 		/// <summary>
 		/// Create a new instance of <see cref="XCollection{TCollection, TItem}"/>.
 		/// </summary>
-		protected XCollection()
-		{
-		}
+		protected XCollection() { }
 
 		/// <summary>
 		/// Implement this method to provide an "Add" method for the collection implementation.
@@ -36,14 +34,9 @@ namespace XMachine.Components.Collections
 
 			IEnumerable<XElement> itemElements = ItemsAsElements ? element.Elements() : element.Elements(ItemName);
 
-			if (!itemElements.Any())
-			{
-				return;
-			}
+			int i = 0, highest = 0, n = itemElements.Count();
 
-			object[] items = Enumerable.Repeat(PlaceholderObject, itemElements.Count()).ToArray();
-
-			int i = 0, highest = 0;
+			object[] items = Enumerable.Repeat(PlaceholderObject, n).ToArray();
 
 			foreach (XElement subElement in itemElements)
 			{
@@ -56,7 +49,7 @@ namespace XMachine.Components.Collections
 				ReaderHints.IgnoreElementName);
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
 				if (!objectBuilder.IsConstructed)
 				{
@@ -65,7 +58,7 @@ namespace XMachine.Components.Collections
 
 				for (; highest < items.Length; highest++)
 				{
-					if (items[highest] == PlaceholderObject)
+					if (ReferenceEquals(items[highest], PlaceholderObject))
 					{
 						return false;
 					}

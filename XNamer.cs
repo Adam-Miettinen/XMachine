@@ -20,17 +20,22 @@ namespace XMachine
 		public Action<Exception> ExceptionHandler { get; set; }
 
 		/// <summary>
+		/// Reset the <see cref="XNamer"/>, clearing out any internal mappings between <see cref="Type"/>s and XML.
+		/// </summary>
+		public abstract void Reset();
+
+		/// <summary>
 		/// Called when <see cref="XMachine"/> scans a new <see cref="Assembly"/>.
 		/// </summary>
 		protected abstract void OnAssemblyScan(Assembly assembly);
 
 		/// <summary>
-		/// Returns the <see cref="Type"/> to which this <see cref="XElement"/> corresponds.
+		/// Returns the <see cref="GetTypeInternal"/> to which this <see cref="XElement"/> corresponds.
 		/// </summary>
 		protected abstract Type GetType(XElement element, Type expectedType);
 
-		internal void Scan(Assembly assembly) => OnAssemblyScan(assembly);
+		internal void ScanInternal(Assembly assembly) => OnAssemblyScan(assembly);
 
-		internal Type Type(XElement element, Type expectedType) => GetType(element, expectedType);
+		internal Type GetTypeInternal(XElement element, Type expectedType) => GetType(element, expectedType);
 	}
 }

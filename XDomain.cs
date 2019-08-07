@@ -113,6 +113,19 @@ namespace XMachine
 		/// </summary>
 		public XWriter GetWriter() => XComponents.GetWriter(this);
 
+		/// <summary>
+		/// Reset the <see cref="XDomain"/>, clearing it and its <see cref="Namer"/> of mappings between <see cref="Type"/>s,
+		/// XML, and <see cref="XType{T}"/>s.
+		/// </summary>
+		public void Reset()
+		{
+			lock (locker)
+			{
+				xTypes.Clear();
+			}
+			Namer.Reset();
+		}
+
 		internal XTypeBox ReflectFromType(Type type)
 		{
 			if (type == null)
@@ -149,7 +162,7 @@ namespace XMachine
 			{
 				try
 				{
-					reflect = Namer.Type(element, declared);
+					reflect = Namer.GetTypeInternal(element, declared);
 				}
 				catch (Exception e)
 				{

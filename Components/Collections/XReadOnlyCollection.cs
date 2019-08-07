@@ -41,9 +41,9 @@ namespace XMachine.Components.Collections
 				ReaderHints.IgnoreElementName);
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
-				if (!items.Any(x => x == PlaceholderObject))
+				if (items.All(x => !ReferenceEquals(x, PlaceholderObject)))
 				{
 					objectBuilder.Object = new ReadOnlyCollection<T>(new List<T>(items.Cast<T>()));
 					return true;

@@ -4,7 +4,7 @@ using System.Xml.Linq;
 namespace XMachine
 {
 	/// <summary>
-	/// A bitflag containing hints that can be passed to <see cref="IXReadOperation"/> by components.
+	/// A bitflag containing hints that can be passed to <see cref="IXReadOperation"/> to increase its performance.
 	/// </summary>
 	[Flags]
 	public enum ReaderHints

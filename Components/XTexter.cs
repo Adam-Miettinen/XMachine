@@ -45,18 +45,16 @@ namespace XMachine.Components
 		/// <summary>
 		/// Reads an object of type <typeparamref name="T"/> from the text of an element.
 		/// </summary>
-		protected override bool OnRead(XType<T> xType, IXReadOperation reader, XElement element, Type expectedType,
-			out T result)
+		protected override bool OnRead(XType<T> xType, IXReadOperation reader, XElement element, out T result)
 		{
-			result = Reader(element.Value);
+			result = Reader(XmlTools.GetElementText(element));
 			return true;
 		}
 
 		/// <summary>
 		/// Reads an object of type <typeparamref name="T"/> from the text of an attribute.
 		/// </summary>
-		protected override bool OnRead(XType<T> xType, IXReadOperation reader, XAttribute attribute, Type expectedType,
-			out T result)
+		protected override bool OnRead(XType<T> xType, IXReadOperation reader, XAttribute attribute, out T result)
 		{
 			result = Reader(attribute.Value);
 			return true;
@@ -76,7 +74,7 @@ namespace XMachine.Components
 		/// </summary>
 		protected override bool OnWrite(XType<T> xType, IXWriteOperation writer, T obj, XAttribute attribute)
 		{
-			attribute.Value = Writer(obj);
+			attribute.Value = attribute.Value == null ? Writer(obj) : (attribute.Value + Writer(obj));
 			return true;
 		}
 	}

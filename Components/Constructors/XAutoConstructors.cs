@@ -42,7 +42,7 @@ namespace XMachine.Components.Constructors
 
 			ConstructorAccess ctorAccess = GetAccessLevel<T>();
 
-			if (type.GetConstructor(Type.EmptyTypes) != null)
+			if (type.GetConstructor(Type.EmptyTypes) != null || type.IsValueType)
 			{
 				xType.Register(new XConstructor<T>(
 					(Func<T>)makePublicParameterlessConstructorDelegate.MakeGenericMethod(typeof(T)).Invoke(this, null)));

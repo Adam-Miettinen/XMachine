@@ -20,7 +20,7 @@ namespace XMachine.Components.Collections
 			.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
 			.FirstOrDefault(x => x.Name == nameof(DictionaryConstructor) && x.IsGenericMethodDefinition);
 
-		private XName itemName, keyName, valueName;
+		private XName itemName, keyName, valueName, arrayLowerBoundName;
 
 		/// <summary>
 		/// The default <see cref="XName"/> used for collection elements.
@@ -52,6 +52,15 @@ namespace XMachine.Components.Collections
 		}
 
 		/// <summary>
+		/// The <see cref="XName"/> used for the attribute denoting an array's non-zero lower bound.
+		/// </summary>
+		public XName ArrayLowerBoundName
+		{
+			get => arrayLowerBoundName ?? (arrayLowerBoundName = "lb");
+			set => arrayLowerBoundName = value ?? throw new ArgumentNullException(nameof(value));
+		}
+
+		/// <summary>
 		/// Adds an <see cref="XCollection{TCollection, TItem}"/> component to an eligible <see cref="XType{TType}"/>.
 		/// </summary>
 		protected override void OnCreateXType<T>(XType<T> xType)
@@ -65,10 +74,23 @@ namespace XMachine.Components.Collections
 
 			if (typeDefinition == typeof(KeyValuePair<,>))
 			{
-				xType.Register((XTypeComponent<T>)typeof(XKeyValuePair<,>)
-					.MakeGenericType(typeArgs).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+				xType.Register((XTypeComponent<T>)typeof(XBuilderComponent<>)
+					.MakeGenericType(type)
+					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault()
-					.Invoke(null));
+					.Invoke(new object[]
+					{
+						typeof(XKeyValuePair<,>)
+							.MakeGenericType(typeArgs)
+							.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+							.FirstOrDefault()
+							.Invoke(null)
+					}));
+				return;
+			}
+			if (xType is XType<DictionaryEntry> xTypeDictEntry)
+			{
+				xTypeDictEntry.Register(new XBuilderComponent<DictionaryEntry>(new XDictionaryEntry()));
 				return;
 			}
 
@@ -112,17 +134,32 @@ namespace XMachine.Components.Collections
 
 			if (type.IsArray)
 			{
-				xType.Register((XTypeComponent<T>)typeof(XArray<>)
-					.MakeGenericType(type.GetElementType())
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-					.FirstOrDefault()
-					.Invoke(null));
+				Type arrayCompType = null;
+
+				switch (type.GetArrayRank())
+				{
+					case 1:
+						arrayCompType = typeof(XArray1<>);
+						break;
+					case 2:
+						arrayCompType = typeof(XArray2<>);
+						break;
+				}
+
+				if (arrayCompType != null)
+				{
+					xType.Register((XTypeComponent<T>)arrayCompType
+						.MakeGenericType(type.GetElementType())
+						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+						.FirstOrDefault()
+						.Invoke(null));
+				}
+
 				return;
 			}
 
 			// IDictionary<,>
 
-			if (typeDefinition != null)
 			{
 				Type dictType = type.GetInterfaces().FirstOrDefault(x =>
 					x.IsGenericType &&
@@ -154,7 +191,6 @@ namespace XMachine.Components.Collections
 
 			// ICollection<>
 
-			if (typeDefinition != null)
 			{
 				Type itemType = type.GetInterfaces().FirstOrDefault(x =>
 					x.IsGenericType &&
@@ -185,7 +221,6 @@ namespace XMachine.Components.Collections
 
 			// Queue<T>
 
-			if (typeDefinition != null)
 			{
 				Type queueType = type.GetSelfAndBaseTypes()
 					.FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(Queue<>));
@@ -204,7 +239,6 @@ namespace XMachine.Components.Collections
 
 			// Stack<T>
 
-			if (typeDefinition != null)
 			{
 				Type stackType = type.GetSelfAndBaseTypes()
 					.FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(Stack<>));

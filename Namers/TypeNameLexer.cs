@@ -1,4 +1,5 @@
-﻿using System.Xml.Linq;
+﻿using System;
+using System.Xml.Linq;
 
 namespace XMachine.Namers
 {
@@ -14,8 +15,18 @@ namespace XMachine.Namers
 
 		internal static bool IsDefinitionEnd(char c) => c == JoinSequence || c == BraceGeneric;
 
-		internal static TypeName Parse(XName xName) => new TypeName(xName.ToString().GetEnumerator());
+		internal static TypeName Parse(XName xName)
+		{
+			CharEnumerator enumerator = xName.ToString().GetEnumerator();
+			_ = enumerator.MoveNext();
+			return new TypeName(enumerator);
+		}
 
-		internal static TypeName Parse(string name) => new TypeName(name.GetEnumerator());
+		internal static TypeName Parse(string name)
+		{
+			CharEnumerator enumerator = name.GetEnumerator();
+			_ = enumerator.MoveNext();
+			return new TypeName(enumerator);
+		}
 	}
 }

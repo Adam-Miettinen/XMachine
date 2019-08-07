@@ -6,7 +6,7 @@
 	public interface IXComponent
 	{
 		/// <summary>
-		/// Whether the component is enabled and should receive method calls.
+		/// Whether the component is enabled and should be invoked by its owner.
 		/// </summary>
 		bool Enabled { get; set; }
 	}

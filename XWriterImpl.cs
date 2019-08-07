@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Xml.Linq;
 
@@ -10,13 +11,21 @@ namespace XMachine
 	{
 		private readonly XDomain domain;
 
+		private readonly Stopwatch stopwatch = new Stopwatch();
+
 		internal XWriterImpl(XDomain domain)
 		{
 			this.domain = domain;
 			ExceptionHandler = domain.ExceptionHandler;
 		}
 
-		public override XElement Write(object obj) => WriteElement(obj, obj.GetType());
+		public override XElement Write(object obj)
+		{
+			stopwatch.Restart();
+			XElement element = WriteElement(obj, obj.GetType());
+			stopwatch.Reset();
+			return element;
+		}
 
 		public override IEnumerable<XElement> WriteAll(IEnumerable objects)
 		{
@@ -26,13 +35,15 @@ namespace XMachine
 				return Enumerable.Empty<XElement>();
 			}
 
+			stopwatch.Restart();
 			List<XElement> elements = new List<XElement>();
 
 			foreach (object obj in objects)
 			{
-				elements.Add(Write(obj));
+				elements.Add(WriteElement(obj, obj.GetType()));
 			}
 
+			stopwatch.Reset();
 			return elements;
 		}
 
@@ -61,6 +72,8 @@ namespace XMachine
 
 		public XElement WriteElement(object obj, Type expectedType)
 		{
+			CheckWatch();
+
 			if (expectedType == null)
 			{
 				ExceptionHandler(new ArgumentNullException(nameof(expectedType)));
@@ -102,6 +115,8 @@ namespace XMachine
 
 		public XElement WriteTo(XElement element, object obj, Type expectedType)
 		{
+			CheckWatch();
+
 			if (element == null)
 			{
 				ExceptionHandler(new ArgumentNullException(nameof(element)));
@@ -138,6 +153,8 @@ namespace XMachine
 
 		public XAttribute WriteAttribute(object obj, XName xName)
 		{
+			CheckWatch();
+
 			if (xName == null)
 			{
 				ExceptionHandler(new ArgumentNullException(nameof(xName)));
@@ -149,6 +166,8 @@ namespace XMachine
 
 		public XAttribute WriteTo(XAttribute attribute, object obj)
 		{
+			CheckWatch();
+
 			if (attribute == null)
 			{
 				ExceptionHandler(new ArgumentNullException(nameof(attribute)));
@@ -186,6 +205,8 @@ namespace XMachine
 
 		private XElement WriteToElement(XElement element, object obj, XTypeBox reflect)
 		{
+			CheckWatch();
+
 			if (ForEachComponent((comp) => comp.Write(this, obj, element)))
 			{
 				Submit(obj);
@@ -195,6 +216,16 @@ namespace XMachine
 			Submit(obj);
 			_ = reflect.OnWrite(this, obj, element);
 			return element;
+		}
+
+		private void CheckWatch()
+		{
+			if (stopwatch.ElapsedMilliseconds > WriteTimeout)
+			{
+				stopwatch.Reset();
+				throw new TimeoutException(
+					$"{nameof(XWriter)} was unable to complete its write operation within {WriteTimeout} milliseconds.");
+			}
 		}
 	}
 }

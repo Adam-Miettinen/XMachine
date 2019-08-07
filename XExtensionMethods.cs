@@ -29,7 +29,7 @@ namespace XMachine
 		public static void Enable(this IXComponent comp) => comp.Enabled = true;
 
 		/// <summary>
-		/// Disable all components.
+		/// Disable a component.
 		/// </summary>
 		public static void Disable(this IXComponent comp) => comp.Enabled = false;
 
@@ -117,7 +117,7 @@ namespace XMachine
 		/// This method can be used to add properties that represent members not automatically recognized, such as fields and
 		/// nonpublic properties.
 		/// </summary>
-		public static XProperty<TType, TProperty> AddProperty<TType, TProperty>(this XType<TType> xType, 
+		public static XProperty<TType, TProperty> AddProperty<TType, TProperty>(this XType<TType> xType,
 			Expression<Func<TType, TProperty>> memberExpression, Action<TType, TProperty> set = null)
 		{
 			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(memberExpression);
@@ -144,7 +144,7 @@ namespace XMachine
 					get: memberExpression.Compile(),
 					set: (obj, value) => ((PropertyInfo)mi).SetValue(obj, value));
 			}
-			
+
 			xType.Component<XProperties<TType>>().Add(property);
 			return property;
 		}
@@ -157,7 +157,11 @@ namespace XMachine
 			Func<TArg1, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(expression1, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -168,7 +172,11 @@ namespace XMachine
 			Func<TArg1, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(property1, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -181,7 +189,11 @@ namespace XMachine
 			Func<TArg1, TArg2, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(expression1, expression2, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -194,7 +206,11 @@ namespace XMachine
 			Func<TArg1, TArg2, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(property1, property2, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -208,7 +224,11 @@ namespace XMachine
 			Func<TArg1, TArg2, TArg3, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(expression1, expression2, expression3, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -222,7 +242,11 @@ namespace XMachine
 			Func<TArg1, TArg2, TArg3, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(property1, property2, property3, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -237,7 +261,11 @@ namespace XMachine
 			Func<TArg1, TArg2, TArg3, TArg4, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(expression1, expression2, expression3, expression4, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -252,7 +280,11 @@ namespace XMachine
 			Func<TArg1, TArg2, TArg3, TArg4, TType> constructor = null)
 		{
 			xType.Component<XProperties<TType>>().ConstructWith(property1, property2, property3, property4, constructor);
-			xType.Component<XConstructor<TType>>().Enabled = false;
+			XConstructor<TType> ctor = xType.Component<XConstructor<TType>>();
+			if (ctor != null)
+			{
+				ctor.Enabled = false;
+			}
 		}
 
 		/// <summary>
@@ -375,7 +407,7 @@ namespace XMachine
 		/// component on this <see cref="XReader"/>.
 		/// </summary>
 		public static void Identify<TType, TId>(this XReader reader, Func<TType, TId> identifier,
-			IEqualityComparer<TId> keyComparer = null) where TType : class where TId : class =>
+			IEqualityComparer<TId> keyComparer = null) where TType : class =>
 			reader.Component<XIdentifierReader>()?.Identifier.Identify(XIdentifier<TType, TId>.Create(identifier, keyComparer));
 
 		/// <summary>
@@ -390,7 +422,7 @@ namespace XMachine
 		/// component on this <see cref="XWriter"/>.
 		/// </summary>
 		public static void Identify<TType, TId>(this XWriter reader, Func<TType, TId> identifier,
-			IEqualityComparer<TId> keyComparer = null) where TType : class where TId : class =>
+			IEqualityComparer<TId> keyComparer = null) where TType : class =>
 			reader.Component<XIdentifierWriter>()?.Identifier.Identify(new XDelegateIdentifier<TType, TId>(identifier, keyComparer));
 
 		/// <summary>
@@ -523,7 +555,7 @@ namespace XMachine
 		/// <see cref="XReader"/>, then return it.
 		/// </summary>
 		public static XReader With<TType, TId>(this XReader reader, XIdentifier<TType, TId> identifier,
-			IEnumerable contextObjects = null) where TType : class where TId : class
+			IEnumerable contextObjects = null) where TType : class
 		{
 			if (identifier == null)
 			{
@@ -543,7 +575,7 @@ namespace XMachine
 		/// </summary>
 		public static XReader With<TType, TId>(this XReader reader, Func<TType, TId> identifier,
 			IEqualityComparer<TId> keyComparer = null, IEnumerable contextObjects = null)
-			where TType : class where TId : class
+			where TType : class
 		{
 			if (identifier == null)
 			{
@@ -562,7 +594,7 @@ namespace XMachine
 		/// <see cref="XReader"/>, then return it.
 		/// </summary>
 		public static XReader With<TType, TId>(this XReader reader, Func<TType, TId> identifier, IEnumerable contextObjects = null)
-			where TType : class where TId : class
+			where TType : class
 		{
 			if (identifier == null)
 			{
@@ -607,7 +639,7 @@ namespace XMachine
 		/// </summary>
 		public static void WriteToElements(this XWriter writer, IEnumerable objects, string file, XName rootElement = null)
 		{
-			XElement root = new XElement(rootElement ?? "XML");
+			XElement root = new XElement(rootElement ?? defaultRoot);
 			foreach (XElement element in writer.WriteAll(objects))
 			{
 				root.Add(element);
@@ -621,7 +653,7 @@ namespace XMachine
 		/// </summary>
 		public static void WriteToElements(this XWriter writer, IEnumerable objects, Stream stream, XName rootElement = null)
 		{
-			XElement root = new XElement(rootElement ?? "XML");
+			XElement root = new XElement(rootElement ?? defaultRoot);
 			foreach (XElement element in writer.WriteAll(objects))
 			{
 				root.Add(element);
@@ -632,11 +664,11 @@ namespace XMachine
 		/// <summary>
 		/// Attempts to write the given collection of objects to the given file as child elements of the given root element.
 		/// </summary>
-		public static void WriteToElements(this XWriter writer, IEnumerable objects, string file, XElement rootElement = null)
+		public static void WriteToElements(this XWriter writer, IEnumerable objects, string file, XElement rootElement)
 		{
 			if (rootElement == null)
 			{
-				rootElement = new XElement(defaultRoot);
+				throw new ArgumentNullException(nameof(rootElement));
 			}
 			foreach (XElement element in writer.WriteAll(objects))
 			{
@@ -648,11 +680,11 @@ namespace XMachine
 		/// <summary>
 		/// Attempts to write the given collection of objects to the given file as child elements of the given root element.
 		/// </summary>
-		public static void WriteToElements(this XWriter writer, IEnumerable objects, Stream stream, XElement rootElement = null)
+		public static void WriteToElements(this XWriter writer, IEnumerable objects, Stream stream, XElement rootElement)
 		{
 			if (rootElement == null)
 			{
-				rootElement = new XElement(defaultRoot);
+				throw new ArgumentNullException(nameof(rootElement));
 			}
 			foreach (XElement element in writer.WriteAll(objects))
 			{
@@ -666,7 +698,7 @@ namespace XMachine
 		/// <see cref="XWriter"/>, then return it.
 		/// </summary>
 		public static XWriter With<TType, TId>(this XWriter writer, XIdentifier<TType, TId> identifier,
-			IEnumerable contextObjects = null) where TType : class where TId : class
+			IEnumerable contextObjects = null) where TType : class
 		{
 			if (identifier == null)
 			{
@@ -686,7 +718,7 @@ namespace XMachine
 		/// </summary>
 		public static XWriter With<TType, TId>(this XWriter writer, Func<TType, TId> identifier,
 			IEqualityComparer<TId> keyComparer = null, IEnumerable contextObjects = null)
-			where TType : class where TId : class
+			where TType : class
 		{
 			if (identifier == null)
 			{
@@ -705,7 +737,7 @@ namespace XMachine
 		/// <see cref="XWriter"/>, then return it.
 		/// </summary>
 		public static XWriter With<TType, TId>(this XWriter writer, Func<TType, TId> identifier, IEnumerable contextObjects = null)
-			where TType : class where TId : class
+			where TType : class
 		{
 			if (identifier == null)
 			{
@@ -888,7 +920,7 @@ namespace XMachine
 		/// <see cref="XReader"/>, then return it.
 		/// </summary>
 		public static XReader ReadWith<TType, TId>(this XDomain domain, XIdentifier<TType, TId> identifier,
-			IEnumerable contextObjects = null) where TType : class where TId : class =>
+			IEnumerable contextObjects = null) where TType : class =>
 			With(domain.GetReader(), identifier, contextObjects);
 
 		/// <summary>
@@ -897,7 +929,7 @@ namespace XMachine
 		/// </summary>
 		public static XReader ReadWith<TType, TId>(this XDomain domain, Func<TType, TId> identifier,
 			IEqualityComparer<TId> keyComparer = null, IEnumerable contextObjects = null)
-			where TType : class where TId : class =>
+			where TType : class =>
 			With(domain.GetReader(), identifier, keyComparer, contextObjects);
 
 		/// <summary>
@@ -905,7 +937,7 @@ namespace XMachine
 		/// <see cref="XReader"/>, then return it.
 		/// </summary>
 		public static XReader ReadWith<TType, TId>(this XDomain domain, Func<TType, TId> identifier, IEnumerable contextObjects = null)
-			where TType : class where TId : class =>
+			where TType : class =>
 			With(domain.GetReader(), identifier, contextObjects);
 
 		/// <summary>
@@ -955,13 +987,13 @@ namespace XMachine
 		/// <summary>
 		/// Attempts to write the given collection of objects to the given file as child elements of the given root element.
 		/// </summary>
-		public static void WriteToElements(this XDomain domain, IEnumerable objects, string file, XElement rootElement = null) =>
+		public static void WriteToElements(this XDomain domain, IEnumerable objects, string file, XElement rootElement) =>
 			WriteToElements(domain.GetWriter(), objects, file, rootElement);
 
 		/// <summary>
 		/// Attempts to write the given collection of objects to the given file as child elements of the given root element.
 		/// </summary>
-		public static void WriteToElements(this XDomain domain, IEnumerable objects, Stream stream, XElement rootElement = null) =>
+		public static void WriteToElements(this XDomain domain, IEnumerable objects, Stream stream, XElement rootElement) =>
 			WriteToElements(domain.GetWriter(), objects, stream, rootElement);
 
 		/// <summary>
@@ -969,7 +1001,7 @@ namespace XMachine
 		/// <see cref="XWriter"/>, then return it.
 		/// </summary>
 		public static XWriter WriteWith<TType, TId>(this XDomain domain, XIdentifier<TType, TId> identifier,
-			IEnumerable contextObjects = null) where TType : class where TId : class =>
+			IEnumerable contextObjects = null) where TType : class =>
 			With(domain.GetWriter(), identifier, contextObjects);
 
 		/// <summary>
@@ -978,7 +1010,7 @@ namespace XMachine
 		/// </summary>
 		public static XWriter WriteWith<TType, TId>(this XDomain domain, Func<TType, TId> identifier,
 			IEqualityComparer<TId> keyComparer = null, IEnumerable contextObjects = null)
-			where TType : class where TId : class =>
+			where TType : class =>
 			With(domain.GetWriter(), identifier, keyComparer, contextObjects);
 
 		/// <summary>
@@ -986,7 +1018,7 @@ namespace XMachine
 		/// <see cref="XWriter"/>, then return it.
 		/// </summary>
 		public static XWriter WriteWith<TType, TId>(this XDomain domain, Func<TType, TId> identifier, IEnumerable contextObjects = null)
-			where TType : class where TId : class =>
+			where TType : class =>
 			With(domain.GetWriter(), identifier, contextObjects);
 
 		/// <summary>

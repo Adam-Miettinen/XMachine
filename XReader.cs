@@ -5,7 +5,7 @@ using System.Xml.Linq;
 namespace XMachine
 {
 	/// <summary>
-	/// <see cref="XReader"/> provides the public API for XML reading operations.
+	/// <see cref="XReader"/> provides public methods to deserialize objects from XML.
 	/// </summary>
 	public abstract class XReader : XWithComponents<XReaderComponent>
 	{

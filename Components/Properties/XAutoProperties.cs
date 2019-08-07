@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Xml.Linq;
 using XMachine.Components.Constructors;
 
 namespace XMachine.Components.Properties
@@ -135,17 +134,25 @@ namespace XMachine.Components.Properties
 
 			// If no parameterless constructor registered, scan for parameterized constructors
 
-			XAutoConstructors autoConstructors = XComponents.Component<XAutoConstructors>();
-
-			if (autoConstructors != null && xType.Component<XConstructor<T>>() == null)
+			if (xType.Component<XConstructor<T>>() == null)
 			{
 				Type type = typeof(T);
 
-				if (!autoConstructors.ConstructorEligible(xType))
+				ConstructorAccess ctorAccess;
+
+				XAutoConstructors autoConstructors = XComponents.Component<XAutoConstructors>();
+				if (autoConstructors != null)
 				{
-					return;
+					if (!autoConstructors.ConstructorEligible(xType))
+					{
+						return;
+					}
+					ctorAccess = autoConstructors.GetAccessLevel<T>();
 				}
-				ConstructorAccess ctorAccess = autoConstructors.GetAccessLevel<T>();
+				else
+				{
+					ctorAccess = ConstructorAccess.Public;
+				}
 
 				ICollection<XPropertyBox<T>> boxedProperties = properties.Properties.Values;
 
@@ -188,7 +195,7 @@ namespace XMachine.Components.Properties
 					{
 						properties.ConstructWithNames = matches.Select(x => x.Name).ToArray();
 
-						properties.ConstructorMethod = (props) => 
+						properties.ConstructorMethod = (props) =>
 							(T)ci.Invoke(properties.ConstructWithNames.Select(x => props[x]).ToArray());
 					}
 				}

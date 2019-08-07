@@ -70,7 +70,7 @@ namespace XMachine.Components.Tuples
 				found3 = true;
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
 				if (found1 && found2 && found3)
 				{

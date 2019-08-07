@@ -10,11 +10,11 @@ namespace XMachine.Reflection
 	/// check provided arguments against that method's parameter constraints and to construct generic methods
 	/// with type arguments discovered from provided argument types.
 	/// </summary>
-	internal sealed class MethodArgumentsMap
+	internal sealed class MethodArgumentsMap : IEquatable<MethodArgumentsMap>
 	{
 		private readonly Type[] parameterTypes;
 
-		private readonly Func<Type[], Type>[] maps;
+		private readonly Stack<Func<Type[], Type[]>>[] maps;
 
 		/// <summary>
 		/// Create a new <see cref="MethodArgumentsMap"/> for the given method, generating a mapping
@@ -35,73 +35,23 @@ namespace XMachine.Reflection
 			if (!method.IsGenericMethod)
 			{
 				MethodDefinition = method;
+				parameterTypes = MethodDefinition.GetParameters()
+					.Select(x => x.ParameterType).ToArray();
 				return;
 			}
 
 			// Create a mapping function for generic methods
-			// Extracts the type arguments for the method from the parameters
 
 			MethodDefinition = method.GetGenericMethodDefinition();
-
 			parameterTypes = MethodDefinition.GetParameters()
 				.Select(x => x.ParameterType).ToArray();
-			Type[] genericParams = MethodDefinition.GetGenericArguments();
 
-			maps = new Func<Type[], Type>[genericParams.Length];
+			Type[] genericParams = MethodDefinition.GetGenericArguments();
+			maps = new Stack<Func<Type[], Type[]>>[genericParams.Length];
 
 			for (int i = 0; i < maps.Length; i++)
 			{
-				// Create a stack to navigate from the arguments list to the type we substitute into each
-				// generic method parameter
-
-				Stack<int> stack = new Stack<int>();
-
-				bool findArgument(Type arg, Type[] search)
-				{
-					for (int j = 0; j < search.Length; j++)
-					{
-						if (search[j] == arg ||
-							(search[j].IsGenericType && findArgument(arg, search[j].GenericTypeArguments)))
-						{
-							// Found the method's type parameter, or a generic type definition whose
-							// arguments contain it (or whose arguments' arguments' contain it, etc.)
-							stack.Push(j);
-							return true;
-						}
-					}
-					return false;
-				}
-
-				if (!findArgument(genericParams[i], parameterTypes))
-				{
-					throw new InvalidOperationException(
-						$"Cannot recover generic method arguments from parameters in method {method.Name}");
-				}
-
-				// The returned delegate iterates through the stack and returns the type to substitute
-
-				maps[i] = (args) =>
-				{
-					Type current = null;
-
-					foreach (int nav in stack)
-					{
-						current = args[nav];
-
-						if (current.IsGenericTypeDefinition)
-						{
-							// Continue digging
-							args = current.GenericTypeArguments;
-						}
-						else
-						{
-							// Finished digging
-							return current;
-						}
-					}
-
-					return current;
-				};
+				maps[i] = MapParameter(genericParams[i]);
 			}
 		}
 
@@ -137,44 +87,40 @@ namespace XMachine.Reflection
 				{
 					return false;
 				}
-
-				// Recursive method to check assignability
-				bool checkParameter(Type parameter, Type arg)
-				{
-					if (parameter.IsGenericParameter)
-					{
-						// Check that the argument can satisfy a generic type parameter's constraints
-						return ReflectionTools.CanCloseGenericParameter(parameter, arg,
-							ReflectionTools.TypeContext.MethodParameter);
-					}
-					else if (parameter.ContainsGenericParameters)
-					{
-						// Check that the argument is, or inherits from, a constructed generic of a generic type
-						// definition
-						if (!ReflectionTools.InheritsFromGenericTypeDefinition(parameter, arg, out Type[] withArgs))
-						{
-							return false;
-						}
-						Type[] defArgs = parameter.GenericTypeArguments;
-						for (int j = 0; j < defArgs.Length; j++)
-						{
-							if (!checkParameter(defArgs[j], withArgs[i]))
-							{
-								return false;
-							}
-						}
-					}
-					else
-					{
-						// For a closed type, just use IsAssignableFrom
-						return parameter.IsAssignableFrom(arg);
-					}
-
-					return false;
-				}
 			}
 
 			return true;
+
+			// Recursive method to check assignability
+			bool checkParameter(Type parameter, Type arg)
+			{
+				if (parameter.IsGenericParameter)
+				{
+					// Check that the argument can satisfy a generic type parameter's constraints
+					if (ReflectionTools.CanCloseGenericParameter(parameter, arg,
+						ReflectionTools.TypeContext.MethodParameter))
+					{
+						return true;
+					}
+				}
+				else if (parameter.ContainsGenericParameters)
+				{
+					// Check that the argument is, or inherits from, a constructed generic of a generic type
+					// definition
+					if (ReflectionTools.InheritsFromOpenGenericType(parameter, arg, out Type[] _,
+						ReflectionTools.TypeContext.MethodParameter))
+					{
+						return true;
+					}
+				}
+				else
+				{
+					// For a closed type, just use IsAssignableFrom
+					return parameter.IsAssignableFrom(arg);
+				}
+
+				return false;
+			}
 		}
 
 		/// <summary>
@@ -201,7 +147,14 @@ namespace XMachine.Reflection
 
 			for (int i = 0; i < args.Length; i++)
 			{
-				args[i] = maps[i](arguments);
+				Type[] i_args = arguments;
+
+				foreach (Func<Type[], Type[]> f in maps[i])
+				{
+					i_args = f(i_args);
+				}
+
+				args[i] = i_args[0];
 			}
 
 			return MethodDefinition.MakeGenericMethod(args);
@@ -214,22 +167,31 @@ namespace XMachine.Reflection
 		/// </summary>
 		public object Invoke(object target, params object[] arguments)
 		{
-			if (arguments == null)
-			{
-				throw new ArgumentNullException(nameof(arguments));
-			}
-			if (arguments.Length != parameterTypes.Length)
+			if ((arguments == null && parameterTypes.Length > 0) ||
+				(arguments != null && arguments.Length != parameterTypes.Length))
 			{
 				throw new ArgumentException($"Wrong number of arguments for method {MethodDefinition}", nameof(arguments));
 			}
 
-			Type[] argumentTypes = arguments.Select(x => x.GetType()).ToArray();
+			MethodInfo constructedMethod;
 
-			MethodInfo constructedMethod = MakeGenericMethod(argumentTypes);
-			if (constructedMethod == null)
+			if (parameterTypes.Length == 0)
 			{
-				throw new InvalidOperationException($"Cannot construct method from {MethodDefinition} using " +
-					$"argument types {string.Join(", ", argumentTypes.Select(x => x.Name))}.");
+				constructedMethod = MakeGenericMethod();
+				if (constructedMethod == null)
+				{
+					throw new InvalidOperationException($"Cannot construct method from {MethodDefinition}.");
+				}
+			}
+			else
+			{
+				Type[] argumentTypes = arguments.Select(x => x.GetType()).ToArray();
+				constructedMethod = MakeGenericMethod(argumentTypes);
+				if (constructedMethod == null)
+				{
+					throw new InvalidOperationException($"Cannot construct method from {MethodDefinition} using " +
+						$"argument types {string.Join(", ", argumentTypes.Select(x => x.Name))}.");
+				}
 			}
 
 			return constructedMethod.Invoke(target, arguments);
@@ -242,17 +204,32 @@ namespace XMachine.Reflection
 		/// </summary>
 		public bool TryInvoke(out object returnValue, object target, params object[] arguments)
 		{
-			if (arguments == null || arguments.Length != parameterTypes.Length)
+			if ((arguments == null && parameterTypes.Length > 0) ||
+				(arguments != null && arguments.Length != parameterTypes.Length))
 			{
 				returnValue = null;
 				return false;
 			}
 
-			MethodInfo constructedMethod = MakeGenericMethod(arguments.Select(x => x.GetType()).ToArray());
-			if (constructedMethod == null)
+			MethodInfo constructedMethod;
+
+			if (parameterTypes.Length == 0)
 			{
-				returnValue = null;
-				return false;
+				constructedMethod = MakeGenericMethod();
+				if (constructedMethod == null)
+				{
+					throw new InvalidOperationException($"Cannot construct method from {MethodDefinition}.");
+				}
+			}
+			else
+			{
+				Type[] argumentTypes = arguments.Select(x => x.GetType()).ToArray();
+				constructedMethod = MakeGenericMethod(argumentTypes);
+				if (constructedMethod == null)
+				{
+					throw new InvalidOperationException($"Cannot construct method from {MethodDefinition} using " +
+						$"argument types {string.Join(", ", argumentTypes.Select(x => x.Name))}.");
+				}
 			}
 
 			returnValue = constructedMethod.Invoke(target, arguments);
@@ -266,7 +243,8 @@ namespace XMachine.Reflection
 		/// </summary>
 		public bool TryInvoke(object target, params object[] arguments)
 		{
-			if (arguments == null || arguments.Length != parameterTypes.Length)
+			if ((arguments == null && parameterTypes.Length > 0) ||
+				(arguments != null && arguments.Length != parameterTypes.Length))
 			{
 				return false;
 			}
@@ -282,11 +260,15 @@ namespace XMachine.Reflection
 		}
 
 		/// <summary>
+		/// True if <paramref name="other"/> has the same <see cref="MethodDefinition"/> property.
+		/// </summary>
+		public bool Equals(MethodArgumentsMap other) => MethodDefinition == other?.MethodDefinition;
+
+		/// <summary>
 		/// True if <paramref name="obj"/> is a <see cref="MethodArgumentsMap"/> with an equal 
 		/// <see cref="MethodDefinition"/> property.
 		/// </summary>
-		public override bool Equals(object obj) => 
-			obj is MethodArgumentsMap map && Equals(MethodDefinition, map.MethodDefinition);
+		public override bool Equals(object obj) => obj is MethodArgumentsMap map && Equals(map);
 
 		/// <summary>
 		/// Return a hashcode based on <see cref="MethodDefinition"/>.
@@ -297,5 +279,77 @@ namespace XMachine.Reflection
 		/// Returns the string representation of <see cref="MethodDefinition"/>.
 		/// </summary>
 		public override string ToString() => MethodDefinition.ToString();
+
+		// Look for the method generic parameter in its arguments and create a delegate telling us how to navigate
+		// there from the method signature
+		private Stack<Func<Type[], Type[]>> MapParameter(Type param)
+		{
+			Stack<Func<Type[], Type[]>> stack = new Stack<Func<Type[], Type[]>>();
+
+			if (!findArgument(parameterTypes))
+			{
+				// The method's generic parameter doesn't seem to meaningfully constrain the method's arguments,
+				// so just assign it typeof(object)
+				stack.Clear();
+				stack.Push((args) => new Type[] { typeof(object) });
+				return stack;
+			}
+
+			// This delegate tells us how to navigate through a set of argument types to find
+			// the closed type to assign to the method's generic type parameter
+			return stack;
+
+			// This recursive local method creates the map
+			bool findArgument(Type[] search)
+			{
+				for (int j = 0; j < search.Length; j++)
+				{
+					Type searchj = search[j];
+
+					if (searchj == param)
+					{
+						// If we find the type parameter itself, the search is over
+						stack.Push((args) => new Type[] { args[j] });
+						return true;
+					}
+					else if (searchj.ContainsGenericParameters)
+					{
+						if (!searchj.IsGenericParameter)
+						{
+							// At an open generic type, check its type arguments to see if they contain our target parameter
+							if (findArgument(searchj.GenericTypeArguments))
+							{
+								stack.Push((args) => args[j].GenericTypeArguments);
+								return true;
+							}
+						}
+						else
+						{
+							// At a generic parameter, we check its constraints to see if the type parameter is identified
+							// within those constraints and can be inferred from how a different parameter satisfies them
+							Type[] constraints = searchj.GetGenericParameterConstraints();
+
+							for (int k = 0; k < constraints.Length; k++)
+							{
+								if (constraints[k].ContainsGenericParameters)
+								{
+									if (findArgument(constraints[k].GenericTypeArguments))
+									{
+										stack.Push((args) =>
+										{
+											_ = ReflectionTools.InheritsFromOpenGenericType(constraints[k], args[j], out Type[] withArgs);
+											return withArgs;
+										});
+										return true;
+									}
+								}
+							}
+						}
+					}
+				}
+
+				return false;
+			}
+		}
 	}
 }

@@ -54,7 +54,7 @@ namespace XMachine.Components.Identifiers
 		/// </summary>
 		protected override bool OnWrite(IXWriteOperation writer, object obj, XAttribute attribute)
 		{
-			if (obj != null && Identifier.CanId(obj.GetType(), out Type idType))
+			if (obj != null && Identifier.CanId(obj.GetType()))
 			{
 				object id = Identifier.GetId(obj);
 
@@ -73,15 +73,20 @@ namespace XMachine.Components.Identifiers
 		/// </summary>
 		protected override void OnSubmit(IXWriteOperation writer, object obj)
 		{
-			if (obj != null && Identifier.CanId(obj.GetType(), out Type idType))
+			if (obj != null && Identifier.CanId(obj.GetType()))
 			{
 				object id = Identifier.GetId(obj);
 
 				if (id != null)
 				{
-					if (referenceObjects.ContainsKey(id))
+					if (referenceObjects.TryGetValue(id, out object existing))
 					{
-						throw new InvalidOperationException($"Reference collision on ID '{id}'.");
+						if (!Equals(existing, obj))
+						{
+							throw new InvalidOperationException(
+								$"Reference collision on ID '{id}' between objects of type " +
+								$"{existing.GetType().Name} and {obj.GetType().Name}.");
+						}
 					}
 					else
 					{

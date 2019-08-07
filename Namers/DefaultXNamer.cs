@@ -18,6 +18,25 @@ namespace XMachine.Namers
 
 		private static readonly Regex arrayPattern = new Regex(string.Concat("^", arrayName, "([0-9]+)"));
 
+		private static readonly IDictionary<Type, XName> defaultNameOverrides = new Dictionary<Type, XName>
+		{
+			{ typeof(object), "object" },
+			{ typeof(bool), "bool" },
+			{ typeof(byte), "byte" },
+			{ typeof(sbyte), "sbyte" },
+			{ typeof(char), "char" },
+			{ typeof(decimal), "decimal" },
+			{ typeof(double), "double" },
+			{ typeof(float), "float" },
+			{ typeof(int), "int" },
+			{ typeof(uint), "uint" },
+			{ typeof(long), "long" },
+			{ typeof(ulong), "ulong" },
+			{ typeof(short), "short" },
+			{ typeof(ushort), "ushort" },
+			{ typeof(string), "string" }
+		};
+
 		/// <summary>
 		/// Whether this namer includes the declaring type/namespace/assembly in <see cref="XName"/>s.
 		/// </summary>
@@ -26,22 +45,25 @@ namespace XMachine.Namers
 		/// <summary>
 		/// Create a new <see cref="DefaultXNamer"/>.
 		/// </summary>
-		public DefaultXNamer(bool includeDeclaring = false, bool includeNamespace = false, bool includeAssembly = false)
+		public DefaultXNamer(bool includeDeclaring = false, bool includeNamespace = false, bool includeAssembly = false) :
+			this(null, includeDeclaring, includeNamespace, includeAssembly)
 		{
-			IncludesDeclaring = includeDeclaring;
-			IncludesNamespace = includeNamespace;
-			IncludesAssembly = includeAssembly;
 		}
 
 		/// <summary>
 		/// Create a new <see cref="DefaultXNamer"/>.
 		/// </summary>
-		public DefaultXNamer(IDictionary<Type, XName> nameOverrides, bool includeDeclaring = false, bool includeNamespace = false, 
+		public DefaultXNamer(IDictionary<Type, XName> nameOverrides, bool includeDeclaring = false, bool includeNamespace = false,
 			bool includeAssembly = false)
 		{
 			IncludesDeclaring = includeDeclaring;
 			IncludesNamespace = includeNamespace;
 			IncludesAssembly = includeAssembly;
+
+			foreach (KeyValuePair<Type, XName> kv in defaultNameOverrides)
+			{
+				this[kv.Key] = kv.Value;
+			}
 
 			if (nameOverrides != null)
 			{
@@ -121,18 +143,12 @@ namespace XMachine.Namers
 
 		private string BuildName(Type type)
 		{
-			string specialName = type.GetXmlNameFromAttributes();
-			if (specialName != null)
-			{
-				return specialName;
-			}
-
 			// Special handling for arrays
 
 			if (type.IsArray)
 			{
 				return string.Concat(arrayName, type.GetArrayRank(), TypeNameLexer.JoinDefinitionParts,
-					TypeNameLexer.BraceGeneric, BuildName(GetEssenceType(type)), TypeNameLexer.BraceGeneric);
+					TypeNameLexer.BraceGeneric, this[type.GetElementType()], TypeNameLexer.BraceGeneric);
 			}
 
 			// Prepend with assembly / namespace
@@ -167,7 +183,7 @@ namespace XMachine.Namers
 				Type[] args = type.GenericTypeArguments;
 				for (int i = 0; i < args.Length; i++)
 				{
-					_ = sb.Append(BuildName(args[i]));
+					_ = sb.Append(this[args[i]]);
 					if (i < args.Length - 1)
 					{
 						_ = sb.Append(TypeNameLexer.JoinSequence);
@@ -183,7 +199,5 @@ namespace XMachine.Namers
 
 			return sb.ToString();
 		}
-
-		private Type GetEssenceType(Type type) => type.GetElementType() ?? type;
 	}
 }

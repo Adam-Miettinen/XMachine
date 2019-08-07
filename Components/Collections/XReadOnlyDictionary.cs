@@ -1,13 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 using System.Xml.Linq;
 
 namespace XMachine.Components.Collections
 {
-	internal sealed class XReadOnlyDictionary<TKey, TValue> : 
+	internal sealed class XReadOnlyDictionary<TKey, TValue> :
 		XCollection<ReadOnlyDictionary<TKey, TValue>, KeyValuePair<TKey, TValue>>
 	{
 		internal XReadOnlyDictionary() { }
@@ -44,9 +42,9 @@ namespace XMachine.Components.Collections
 				ReaderHints.IgnoreElementName);
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
-				if (!items.Any(x => x == PlaceholderObject))
+				if (items.All(x => !ReferenceEquals(x, PlaceholderObject)))
 				{
 					IDictionary<TKey, TValue> dict = new Dictionary<TKey, TValue>(items.Length);
 

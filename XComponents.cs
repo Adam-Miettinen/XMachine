@@ -7,6 +7,7 @@ using XMachine.Components.Collections;
 using XMachine.Components.Constructors;
 using XMachine.Components.Identifiers;
 using XMachine.Components.Properties;
+using XMachine.Components.Rules;
 
 namespace XMachine
 {
@@ -44,7 +45,7 @@ namespace XMachine
 
 		internal static readonly Action<Exception> ThrowHandler = (e) => throw e;
 
-		private static readonly ICollection<Exception> startupErrors;
+		private static readonly Queue<Exception> startupErrors;
 
 		private static readonly IList<WeakReference<XDomain>> domains;
 
@@ -60,8 +61,8 @@ namespace XMachine
 
 			componentManager = new XMachineComponents();
 
-			startupErrors = new List<Exception>();
-			ExceptionHandler = (e) => startupErrors.Add(e);
+			startupErrors = new Queue<Exception>();
+			ExceptionHandler = (e) => startupErrors.Enqueue(e);
 		}
 
 		/// <summary>
@@ -69,7 +70,16 @@ namespace XMachine
 		/// usually result from a failure to process a custom method tagged with one of the <see cref="XMachine"/>
 		/// attributes.
 		/// </summary>
-		public static IEnumerable<Exception> StartupErrors => startupErrors;
+		public static IEnumerable<Exception> StartupErrors
+		{
+			get
+			{
+				while (startupErrors.Count > 0)
+				{
+					yield return startupErrors.Dequeue();
+				}
+			}
+		}
 
 		/// <summary>
 		/// Get or set a delegate that will handle exceptions.
@@ -170,19 +180,6 @@ namespace XMachine
 			}
 		}
 
-		/// <summary>
-		/// Retrieve the collection of global identifiers in the <see cref="XIdentifiers"/> component, if it exists.
-		/// </summary>
-		public static XCompositeIdentifier Identifier() => Component<XIdentifiers>()?.Identifier;
-
-		/// <summary>
-		/// Add an <see cref="XIdentifier{TType, TId}"/> characterized by the given delegate to the global identifiers 
-		/// used by the <see cref="XIdentifiers"/> component, if it exists.
-		/// </summary>
-		public static void Identify<TType, TId>(Func<TType, TId> identifier, IEqualityComparer<TId> keyComparer = null)
-			where TType : class where TId : class =>
-			Component<XIdentifiers>()?.Identifier.Identify(XIdentifier<TType, TId>.Create(identifier, keyComparer));
-
 		internal static void OnXDomainCreated(XDomain domain)
 		{
 			for (int i = 0; i < domains.Count; i++)
@@ -270,7 +267,22 @@ namespace XMachine
 			ExceptionHandler = ThrowHandler;
 		}
 
-		private static void ScanAssembly(Assembly assembly, IEnumerable<XMachineComponent> components)
+		internal static void ResetStatic()
+		{
+			for (int i = 0; i < domains.Count; i++)
+			{
+				if (domains[i].TryGetTarget(out XDomain domain))
+				{
+					domain.Reset();
+				}
+				else
+				{
+					domains.RemoveAt(i--);
+				}
+			}
+		}
+
+		internal static void ScanAssembly(Assembly assembly, IEnumerable<XMachineComponent> components)
 		{
 			if (assembly == null)
 			{
@@ -283,7 +295,7 @@ namespace XMachine
 			{
 				if (domains[i].TryGetTarget(out XDomain domain))
 				{
-					domain.Namer.Scan(assembly);
+					domain.Namer.ScanInternal(assembly);
 				}
 				else
 				{

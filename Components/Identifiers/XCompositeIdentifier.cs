@@ -82,6 +82,11 @@ namespace XMachine.Components.Identifiers
 		}
 
 		/// <summary>
+		/// Return the number of <see cref="XIdentifier{TType, TId}"/> objects contained in this one.
+		/// </summary>
+		public int Count => identifiers.Count;
+
+		/// <summary>
 		/// Returns the ID produced by the first <see cref="XIdentifier{TType, TId}"/> with a matching object
 		/// type.
 		/// </summary>
@@ -91,24 +96,33 @@ namespace XMachine.Components.Identifiers
 			{
 				return null;
 			}
+
 			Type type = obj.GetType();
+
+			if (XDefaultTypes.IsDefaultType(type))
+			{
+				return null;
+			}
+
+			XIdentifierBox bestBox = null;
 
 			foreach (XIdentifierBox box in identifiers)
 			{
-				if (box.Type.IsAssignableFrom(type))
+				if (box.Type.IsAssignableFrom(type) &&
+					(bestBox == null || bestBox.Type.IsAssignableFrom(box.Type)))
 				{
-					return box.GetId(obj);
+					bestBox = box;
 				}
 			}
 
-			return null;
+			return bestBox?.GetId(obj);
 		}
 
 		/// <summary>
 		/// Check whether any <see cref="XIdentifier{TType, TId}"/> in this <see cref="XCompositeIdentifier"/> is
 		/// able to assign an ID to objects of the given <see cref="Type"/>.
 		/// </summary>
-		public bool CanId(Type type)
+		public override bool CanId(Type type)
 		{
 			if (type == null)
 			{
@@ -117,7 +131,7 @@ namespace XMachine.Components.Identifiers
 
 			foreach (XIdentifierBox box in identifiers)
 			{
-				if (box.Type.IsAssignableFrom(type))
+				if (box.CanId(type))
 				{
 					return true;
 				}
@@ -138,13 +152,21 @@ namespace XMachine.Components.Identifiers
 				throw new ArgumentNullException(nameof(type));
 			}
 
+			XIdentifierBox bestBox = null;
+
 			foreach (XIdentifierBox box in identifiers)
 			{
-				if (box.Type.IsAssignableFrom(type))
+				if (box.CanId(type) &&
+					(bestBox == null || bestBox.Type.IsAssignableFrom(box.Type)))
 				{
-					idType = box.IdType;
-					return true;
+					bestBox = box;
 				}
+			}
+
+			if (bestBox != null)
+			{
+				idType = bestBox.IdType;
+				return true;
 			}
 
 			idType = null;
@@ -154,24 +176,35 @@ namespace XMachine.Components.Identifiers
 		/// <summary>
 		/// Add a new <see cref="XIdentifier{TType, TId}"/> to this <see cref="XCompositeIdentifier"/>.
 		/// </summary>
-		public void Identify<TType, TId>(XIdentifier<TType, TId> identifier) where TType : class where TId : class =>
+		public void Identify<TType, TId>(XIdentifier<TType, TId> identifier) where TType : class =>
 			identifiers.Add(XIdentifierBox.Box(identifier ?? throw new ArgumentNullException(nameof(identifier))));
+
+		/// <summary>
+		/// Add a new <see cref="XIdentifier{TType, TId}"/> to this <see cref="XCompositeIdentifier"/>.
+		/// </summary>
+		public void Identify<TType, TId>(Func<TType, TId> identifier) where TType : class =>
+			identifiers.Add(XIdentifierBox.Box(XIdentifier<TType, TId>.Create(identifier ?? throw new ArgumentNullException(nameof(identifier)))));
 
 		/// <summary>
 		/// Remove any <see cref="XIdentifier{TType, TId}"/> from this <see cref="XCompositeIdentifier"/> if its
 		/// reference type is assignable to <typeparamref name="TType"/>.
 		/// </summary>
-		public void ClearIdentities<TType>()
+		public void Clear<TType>()
 		{
 			Type type = typeof(TType);
 
 			foreach (XIdentifierBox box in identifiers.ToArray())
 			{
-				if (type.IsAssignableFrom(box.Type))
+				if (box.CanId(type))
 				{
 					_ = identifiers.Remove(box);
 				}
 			}
 		}
+
+		/// <summary>
+		/// Remove all identifiers.
+		/// </summary>
+		public void Clear() => identifiers.Clear();
 	}
 }

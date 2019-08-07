@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -40,10 +41,6 @@ namespace XMachine
 		/// The invariant culture object, used in XML so that code can be portable across systems.
 		/// </summary>
 		public static readonly IFormatProvider InvariantCulture = CultureInfo.InvariantCulture;
-
-		private static readonly ICollection<Assembly> ignoredAssemblies = new HashSet<Assembly>();
-
-		private static readonly ICollection<Type> ignoredTypes = new HashSet<Type>();
 
 		private static readonly XCollator defaultCollator = new XCollator();
 
@@ -118,15 +115,63 @@ namespace XMachine
 
 		#region Utility methods
 
-		/// <summary>
-		/// Ignore the given <see cref="Type"/>, blocking <see cref="XMachine"/> from using it or its types.
-		/// </summary>
-		public static void Ignore(Assembly assembly) => ignoredAssemblies.Add(assembly);
+		private static readonly ISet<Assembly> ignoredAssemblies = new HashSet<Assembly>();
+
+		private static bool ignoreAll;
 
 		/// <summary>
-		/// Ignore the given <see cref="Type"/>, blocking <see cref="XMachine"/> from serializing it or scanning it.
+		/// Get or set a value that determines whether <see cref="Assembly"/> objects are ignored by default.
+		/// Changing this value resets the list of ignored/unignored assemblies.
 		/// </summary>
-		public static void Ignore(Type type) => ignoredTypes.Add(type);
+		public static bool IgnoreAll
+		{
+			get => ignoreAll;
+			set
+			{
+				if (ignoreAll != value)
+				{
+					ignoredAssemblies.Clear();
+					XComponents.ResetStatic();
+					ignoreAll = value;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Ignore the given <see cref="Assembly"/>, blocking <see cref="XMachine"/> from using it or its types.
+		/// </summary>
+		public static void Ignore(Assembly assembly) => 
+			_ = IgnoreAll ? ignoredAssemblies.Remove(assembly) : ignoredAssemblies.Add(assembly);
+
+		/// <summary>
+		/// Unignore the given <see cref="Assembly"/>, allowing <see cref="XMachine"/> to scan it and its types.
+		/// </summary>
+		public static void UnIgnore(Assembly assembly)
+		{
+			if (IgnoreAll ? ignoredAssemblies.Add(assembly) : ignoredAssemblies.Remove(assembly))
+			{
+				XComponents.ScanAssembly(assembly, XComponents.Components());
+			}
+		}
+
+		/// <summary>
+		/// Returns the concatenated string value of the direct child <see cref="XText"/> nodes of the given
+		/// <see cref="XElement"/>.
+		/// </summary>
+		public static string GetElementText(XElement element)
+		{
+			StringBuilder sb = new StringBuilder();
+
+			foreach (XNode node in element.Nodes())
+			{
+				if (node.NodeType == XmlNodeType.Text || node.NodeType == XmlNodeType.CDATA)
+				{
+					_ = sb.Append(((XText)node).Value);
+				}
+			}
+
+			return sb.ToString();
+		}
 
 		/// <summary>
 		/// Searches the direct members of an <see cref="XElement"/> for an attribute, then an element, with 
@@ -150,8 +195,7 @@ namespace XMachine
 			type.GetCustomAttribute<XIgnoreAttribute>() != null ||
 			(type != type.DeclaringType && type.DeclaringType?.IsXIgnored() == true) ||
 			(!type.IsGenericParameter && type.GenericTypeArguments.Any(x =>
-				x != type && x.IsXIgnored(true))) ||
-			ignoredTypes.Contains(type);
+				x != type && x.IsXIgnored(true)));
 
 		internal static bool IsXIgnored(this PropertyInfo property, bool checkType = false, bool checkAssembly = false) =>
 			(checkType && property.ReflectedType.IsXIgnored(checkAssembly)) ||
@@ -169,27 +213,18 @@ namespace XMachine
 			(method.ReturnType != typeof(void) && method.ReturnType.IsXIgnored(true)) ||
 			method.GetParameters().Any(x => x.ParameterType.IsXIgnored(true));
 
-		internal static string GetXmlNameFromAttributes(this Type type)
-		{
-			XNameAttribute xna = type.GetCustomAttribute<XNameAttribute>();
-			if (xna != null && !string.IsNullOrEmpty(xna.Name))
-			{
-				return xna.Name;
-			}
-			XmlTypeAttribute xta = type.GetCustomAttribute<XmlTypeAttribute>();
-			if (xta != null && !string.IsNullOrEmpty(xta.TypeName))
-			{
-				return xta.TypeName;
-			}
-			return null;
-		}
-
 		internal static string GetXmlNameFromAttributes(this MemberInfo member)
 		{
 			XNameAttribute xna = member.GetCustomAttribute<XNameAttribute>();
 			if (xna != null)
 			{
 				return xna.Name;
+			}
+
+			XmlTypeAttribute xta = member.GetCustomAttribute<XmlTypeAttribute>();
+			if (xta != null && !string.IsNullOrEmpty(xta.TypeName))
+			{
+				return xta.TypeName;
 			}
 
 			XmlAttributeAttribute xaa = member.GetCustomAttribute<XmlAttributeAttribute>();
@@ -259,96 +294,98 @@ namespace XMachine
 		/// <summary>
 		/// Attempts to read a <see cref="byte"/> from text, returning <c>0</c> if unsuccessful.
 		/// </summary>
-		public static byte ReadByte(string text) => byte.TryParse(text, out byte val) ? val : default;
+		public static byte ReadByte(string text, byte @default = default) => byte.TryParse(text, out byte val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="char"/> from text, returning a null character (\0) if unsuccessful.
 		/// </summary>
-		public static char ReadChar(string text) => char.TryParse(text, out char val) ? val : default;
+		public static char ReadChar(string text, char @default = default) => char.TryParse(text, out char val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="DateTime"/> from text, returning <see cref="DateTime.MinValue"/> 
 		/// if unsuccessful.
 		/// </summary>
-		public static DateTime ReadDateTime(string text) =>
-			DateTime.TryParse(text, InvariantCulture, DateTimeStyles, out DateTime val) ? val : default;
+		public static DateTime ReadDateTime(string text, DateTime @default = default) =>
+			DateTime.TryParse(text, InvariantCulture, DateTimeStyles, out DateTime val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="decimal"/> from text, returning zero (0M) if unsuccessful.
 		/// </summary>
-		public static decimal ReadDecimal(string text) =>
-			decimal.TryParse(text, NumberStyles, InvariantCulture, out decimal val) ? val : default;
+		public static decimal ReadDecimal(string text, decimal @default = default) =>
+			decimal.TryParse(text, NumberStyles, InvariantCulture, out decimal val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="double"/> from text, returning zero (0.0D) if unsuccessful.
 		/// </summary>
-		public static double ReadDouble(string text) =>
-			double.TryParse(text, NumberStyles, InvariantCulture, out double val) ? val : default;
+		public static double ReadDouble(string text, double @default = default) =>
+			double.TryParse(text, NumberStyles, InvariantCulture, out double val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="short"/> from text, returning 0 if unsuccessful.
 		/// </summary>
-		public static short ReadShort(string text) =>
-			short.TryParse(text, NumberStyles, InvariantCulture, out short val) ? val : default;
+		public static short ReadShort(string text, short @default = default) =>
+			short.TryParse(text, NumberStyles, InvariantCulture, out short val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read an <see cref="int"/> from text, returning 0 if unsuccessful.
 		/// </summary>
-		public static int ReadInt(string text) =>
-			int.TryParse(text, NumberStyles, InvariantCulture, out int val) ? val : default;
+		public static int ReadInt(string text, int @default = default) =>
+			int.TryParse(text, NumberStyles, InvariantCulture, out int val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="long"/> from text, returning 0L if unsuccessful.
 		/// </summary>
-		public static long ReadLong(string text) =>
-			long.TryParse(text, NumberStyles, InvariantCulture, out long val) ? val : default;
+		public static long ReadLong(string text, long @default = default) =>
+			long.TryParse(text, NumberStyles, InvariantCulture, out long val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="sbyte"/> from text, returning 0 if unsuccessful.
 		/// </summary>
-		public static sbyte ReadSByte(string text) =>
-			sbyte.TryParse(text, NumberStyles, InvariantCulture, out sbyte val) ? val : default;
+		public static sbyte ReadSByte(string text, sbyte @default = default) =>
+			sbyte.TryParse(text, NumberStyles, InvariantCulture, out sbyte val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="float"/> from text, returning 0.0F if unsuccessful.
 		/// </summary>
-		public static float ReadFloat(string text) =>
-			float.TryParse(text, NumberStyles, InvariantCulture, out float val) ? val : default;
+		public static float ReadFloat(string text, float @default = default) =>
+			float.TryParse(text, NumberStyles, InvariantCulture, out float val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="ushort"/> from text, returning 0 if unsuccessful.
 		/// </summary>
-		public static ushort ReadUShort(string text) =>
-			ushort.TryParse(text, NumberStyles, InvariantCulture, out ushort val) ? val : default;
+		public static ushort ReadUShort(string text, ushort @default = default) =>
+			ushort.TryParse(text, NumberStyles, InvariantCulture, out ushort val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="uint"/> from text, returning 0 if unsuccessful.
 		/// </summary>
-		public static uint ReadUInt(string text) =>
-			uint.TryParse(text, NumberStyles, InvariantCulture, out uint val) ? val : default;
+		public static uint ReadUInt(string text, uint @default = default) =>
+			uint.TryParse(text, NumberStyles, InvariantCulture, out uint val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="ulong"/> from text, returning 0 if unsuccessful.
 		/// </summary>
-		public static ulong ReadULong(string text) =>
-			ulong.TryParse(text, NumberStyles, InvariantCulture, out ulong val) ? val : default;
+		public static ulong ReadULong(string text, ulong @default = default) =>
+			ulong.TryParse(text, NumberStyles, InvariantCulture, out ulong val) ? val : @default;
 
 		/// <summary>
 		/// Attempts to read a member of the enum <typeparamref name="T"/> from text, returning the default
 		/// member if unsuccessful.
 		/// </summary>
-		public static T ReadEnum<T>(string text) where T : Enum => Enum.Parse(typeof(T), text) is T tobj ? tobj : default;
+		public static T ReadEnum<T>(string text, T @default = default) where T : Enum => 
+			Enum.Parse(typeof(T), text) is T tobj ? tobj : @default;
 
 		/// <summary>
 		/// Attempts to read a <see cref="Version"/> from text, returning <c>null</c> if unavailable.
 		/// </summary>
-		public static Version ReadVersion(string text) => Version.TryParse(text, out Version val) ? val : null;
+		public static Version ReadVersion(string text, Version @default = default) => 
+			Version.TryParse(text, out Version val) ? val : @default;
 
 		/// <summary>
-		/// Attempts to read a <see cref="BigInteger"/> from text, returning zero if unsuccessful.
+		/// Attempts to read a <see cref="Guid"/> from text, returning <see cref="Guid.Empty"/> if unsuccessful.
 		/// </summary>
-		public static BigInteger ReadBigInteger(string text) =>
-			BigInteger.TryParse(text, NumberStyles, InvariantCulture, out BigInteger val) ? val : default;
+		public static Guid ReadGuid(string text, string format = "N") =>
+			Guid.TryParseExact(text, format, out Guid val) ? val : Guid.Empty;
 
 		/// <summary>
 		/// Returns an <see cref="XText"/> node containing the given string. The string is checked for reserved XML 
@@ -431,6 +468,11 @@ namespace XMachine
 		/// Writes the given object as a string
 		/// </summary>
 		public static string Write(BigInteger obj) => obj.ToString(InvariantCulture);
+
+		/// <summary>
+		/// Writes the given object as a string
+		/// </summary>
+		public static string Write(Guid obj, string format = "N") => obj.ToString(format, InvariantCulture);
 
 		#endregion
 
@@ -651,13 +693,13 @@ namespace XMachine
 		/// <summary>
 		/// Attempts to write the given collection of objects to the given file as child elements of the given root element.
 		/// </summary>
-		public static void WriteToElements(IEnumerable objects, string file, XElement rootElement = null) =>
+		public static void WriteToElements(IEnumerable objects, string file, XElement rootElement) =>
 			XExtensionMethods.WriteToElements(XDomain.Global, objects, file, rootElement);
 
 		/// <summary>
 		/// Attempts to write the given collection of objects to the given file as child elements of the given root element.
 		/// </summary>
-		public static void WriteToElements(IEnumerable objects, Stream stream, XElement rootElement = null) =>
+		public static void WriteToElements(IEnumerable objects, Stream stream, XElement rootElement) =>
 			XExtensionMethods.WriteToElements(XDomain.Global, objects, stream, rootElement);
 
 		/// <summary>
@@ -690,6 +732,23 @@ namespace XMachine
 		/// </summary>
 		public static XWriter WriteWith(IEnumerable contextObjects) =>
 			XExtensionMethods.WriteWith(XDomain.Global, contextObjects);
+
+		#endregion
+
+		#region Other static methods
+
+		/// <summary>
+		/// Retrieve the collection of global identifiers in the <see cref="XIdentifiers"/> component, if it exists.
+		/// </summary>
+		public static XCompositeIdentifier Identifier() => XComponents.Component<XIdentifiers>()?.Identifier;
+
+		/// <summary>
+		/// Add an <see cref="XIdentifier{TType, TId}"/> characterized by the given delegate to the global identifiers 
+		/// used by the <see cref="XIdentifiers"/> component, if it exists.
+		/// </summary>
+		public static void Identify<TType, TId>(Func<TType, TId> identifier, IEqualityComparer<TId> keyComparer = null)
+			where TType : class =>
+			XComponents.Component<XIdentifiers>()?.Identifier.Identify(XIdentifier<TType, TId>.Create(identifier, keyComparer));
 
 		#endregion
 	}

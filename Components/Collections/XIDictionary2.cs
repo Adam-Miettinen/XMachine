@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace XMachine.Components.Collections
 {
@@ -11,7 +12,7 @@ namespace XMachine.Components.Collections
 		{
 			if (item.Key == null)
 			{
-				return;
+				throw new ArgumentNullException(nameof(item.Key));
 			}
 			if (collection.ContainsKey(item.Key))
 			{

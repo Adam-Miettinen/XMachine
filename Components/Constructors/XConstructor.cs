@@ -31,7 +31,7 @@ namespace XMachine.Components.Constructors
 		{
 			if (!objectBuilder.IsConstructed)
 			{
-				objectBuilder.AddTask(() =>
+				reader.AddTask(this, () =>
 				{
 					if (!objectBuilder.IsConstructed)
 					{

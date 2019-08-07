@@ -11,18 +11,24 @@ namespace XMachine
 				XName = xType.Name,
 				Type = typeof(T),
 
-				onReadElement = (reader, element, type) =>
-					xType.Read(reader, element, type, out T result)
+				onComponentReadElement = (comp, reader, element, assign) =>
+					comp.Read(reader, xType, element, assign),
+
+				onComponentReadAttribute = (comp, reader, attribute, assign) =>
+					comp.Read(reader, xType, attribute, assign),
+
+				onReadElement = (reader, element) =>
+					xType.Read(reader, element, out T result)
 						? new Tuple<bool, object>(true, result)
 						: new Tuple<bool, object>(false, null),
 
-				onReadAttribute = (reader, attribute, type) =>
-					xType.Read(reader, attribute, type, out T result)
+				onReadAttribute = (reader, attribute) =>
+					xType.Read(reader, attribute, out T result)
 						? new Tuple<bool, object>(true, result)
 						: new Tuple<bool, object>(false, null),
 
 				onBuildObject = (reader, element, objectBuilder) =>
-					xType.Build(reader, element, ObjectBuilderBox.Unbox<T>(objectBuilder)),
+					xType.Build(reader, element, objectBuilder as ObjectBuilder<T>),
 
 				onWriteElement = (writer, obj, element) =>
 					xType.Write(writer, (T)obj, element),
@@ -35,9 +41,14 @@ namespace XMachine
 
 		private readonly object xType;
 
-		private Func<IXReadOperation, XElement, Type, Tuple<bool, object>> onReadElement;
-		private Func<IXReadOperation, XAttribute, Type, Tuple<bool, object>> onReadAttribute;
-		private Action<IXReadOperation, XElement, ObjectBuilderBox> onBuildObject;
+		private Func<XReaderComponent, IXReadOperation, XElement,
+			Func<object, bool>, bool> onComponentReadElement;
+		private Func<XReaderComponent, IXReadOperation, XAttribute,
+			Func<object, bool>, bool> onComponentReadAttribute;
+
+		private Func<IXReadOperation, XElement, Tuple<bool, object>> onReadElement;
+		private Func<IXReadOperation, XAttribute, Tuple<bool, object>> onReadAttribute;
+		private Action<IXReadOperation, XElement, object> onBuildObject;
 
 		private Func<IXWriteOperation, object, XElement, bool> onWriteElement;
 		private Func<IXWriteOperation, object, XAttribute, bool> onWriteAttribute;
@@ -48,21 +59,30 @@ namespace XMachine
 
 		internal Type Type { get; private set; }
 
-		internal bool OnRead(IXReadOperation reader, XElement element, Type expectedType, out object result)
+		internal bool OnComponentRead(XReaderComponent comp, IXReadOperation reader, XElement element,
+			Func<object, bool> assign) =>
+			onComponentReadElement(comp, reader, element, assign);
+
+		internal bool OnComponentRead(XReaderComponent comp, IXReadOperation reader, XAttribute attribute,
+			Func<object, bool> assign) =>
+			onComponentReadAttribute(comp, reader, attribute, assign);
+
+		internal bool OnRead(IXReadOperation reader, XElement element, out object result)
 		{
-			Tuple<bool, object> x = onReadElement(reader, element, expectedType);
+			Tuple<bool, object> x = onReadElement(reader, element);
 			result = x.Item2;
 			return x.Item1;
 		}
 
-		internal bool OnRead(IXReadOperation reader, XAttribute attribute, Type expectedType, out object result)
+
+		internal bool OnRead(IXReadOperation reader, XAttribute attribute, out object result)
 		{
-			Tuple<bool, object> x = onReadAttribute(reader, attribute, expectedType);
+			Tuple<bool, object> x = onReadAttribute(reader, attribute);
 			result = x.Item2;
 			return x.Item1;
 		}
 
-		internal void OnBuild(IXReadOperation reader, XElement element, ObjectBuilderBox objectBuilder) =>
+		internal void OnBuild(IXReadOperation reader, XElement element, object objectBuilder) =>
 			onBuildObject(reader, element, objectBuilder);
 
 		internal bool OnWrite(IXWriteOperation writer, object obj, XElement element) =>

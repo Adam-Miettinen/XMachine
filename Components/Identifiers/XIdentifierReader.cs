@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Xml.Linq;
+using XMachine.Reflection;
 
 namespace XMachine.Components.Identifiers
 {
@@ -33,95 +34,111 @@ namespace XMachine.Components.Identifiers
 		/// <summary>
 		/// Resolves the element as a reference if possible
 		/// </summary>
-		protected override bool OnRead(IXReadOperation reader, XElement element, Type expectedType, Func<object, bool> assign,
-			out Func<bool> task)
+		protected override bool OnRead<T>(IXReadOperation reader, XType<T> xType, XElement element, Func<object, bool> assign)
 		{
+			Type type = typeof(T);
+
+			// A serialized reference has no attributes, no elements, some text, is of a type that can be ID'd,
+			// and not of a type that has a registered XTexter
+
+			string value = element.Value;
+
 			if (!element.HasAttributes &&
 				!element.HasElements &&
-				Identifier.CanId(expectedType, out Type idType))
+				!string.IsNullOrEmpty(value) &&
+				xType.Component<XTexter<T>>() == null &&
+				Identifier.CanId(type, out Type idType))
 			{
-				// Read the element as an ID
-
 				bool idFound = false;
 				object id = null;
 
 				reader.Read(element, idType, x =>
 				{
-					id = x;
+					idFound = true;
+					if (!Identifier.KeyComparer.Equals(x, ReflectionTools.GetDefaultValue(idType)))
+					{
+						id = x;
+					}
 					return true;
 				},
 				ReaderHints.IgnoreElementName);
 
 				// Schedule a task to assign the object if it shows up in the dictionary
 
-				bool refFound = false;
-				object referenceObject = null;
-
-				task = () =>
+				reader.AddTask(this, () =>
 				{
-					if (refFound)
+					if (!idFound)
 					{
-						return assign(referenceObject);
+						return false;
 					}
-
-					if (idFound && referenceObjects.TryGetValue(id, out referenceObject))
+					if (id == null)
 					{
-						refFound = true;
-						if (!expectedType.IsAssignableFrom(referenceObject.GetType()) ||
-							assign(referenceObject))
+						return true;
+					}
+					if (referenceObjects.TryGetValue(id, out object refObject))
+					{
+						if (refObject == null || type == refObject.GetType())
 						{
-							return true;
+							return assign(refObject);
+						}
+						else
+						{
+							throw new InvalidOperationException(
+								$"Possible collision: the reference object with ID {id} was of expected type {type.Name}, " +
+								$"but that ID resolved to an object of type {refObject.GetType().Name}.");
 						}
 					}
 
 					return false;
-				};
+				});
 
 				return true;
 			}
 
-			task = null;
 			return false;
 		}
 
 		/// <summary>
 		/// Resolves the attribute as a reference if possible
 		/// </summary>
-		protected override bool OnRead(IXReadOperation reader, XAttribute attribute, Type expectedType, Func<object, bool> assign,
-			out Func<bool> task)
+		protected override bool OnRead<T>(IXReadOperation reader, XType<T> xType, XAttribute attribute, Func<object, bool> assign)
 		{
-			if (Identifier.CanId(expectedType))
+			Type type = typeof(T);
+
+			if (Identifier.CanId(type))
 			{
 				string text = attribute.Value;
 				if (!string.IsNullOrWhiteSpace(text) && text.Length > 0)
 				{
-					task = () =>
+					reader.AddTask(this, () =>
 					{
-						if (referenceObjects.TryGetValue(text, out object referenceObject))
+						if (referenceObjects.TryGetValue(text, out object refObject))
 						{
-							if (expectedType.IsAssignableFrom(referenceObject.GetType()))
+							if (refObject == null || refObject.GetType() == type)
 							{
-								_ = assign(referenceObject);
+								return assign(refObject);
 							}
-							return true;
+							else
+							{
+								throw new InvalidOperationException(
+									$"Possible collision: the reference object with ID {text} was of expected type {type.Name}, " +
+									$"but that ID resolved to an object of type {refObject.GetType().Name}.");
+							}
 						}
 						return false;
-					};
+					});
 					return true;
 				}
 			}
 
-			task = null;
 			return false;
 		}
 
 		/// <summary>
 		/// Register a constructed object as a reference
 		/// </summary>
-		protected override void OnSubmit(IXReadOperation reader, object obj, out Func<bool> task)
+		protected override void OnSubmit(IXReadOperation reader, object obj)
 		{
-			task = null;
-
 			if (obj != null && Identifier.CanId(obj.GetType()))
 			{
 				object id = Identifier.GetId(obj);
@@ -132,7 +149,7 @@ namespace XMachine.Components.Identifiers
 				}
 				else
 				{
-					task = () =>
+					reader.AddTask(this, () =>
 					{
 						object id2 = Identifier.GetId(obj);
 						if (id2 != null)
@@ -141,7 +158,7 @@ namespace XMachine.Components.Identifiers
 							return true;
 						}
 						return false;
-					};
+					});
 				}
 			}
 		}

@@ -8,7 +8,7 @@ namespace XMachine.Components.Identifiers
 	/// by assigning them unique identifiers of type <typeparamref name="TId"/>.
 	/// </summary>
 	public abstract class XIdentifier<TType, TId> : IEqualityComparer<TType>
-		where TType : class where TId : class
+		where TType : class
 	{
 		/// <summary>
 		/// Create a new <see cref="XIdentifier{TType, TId}"/> from the given delegate and optional 
@@ -32,6 +32,12 @@ namespace XMachine.Components.Identifiers
 		/// The <see cref="IEqualityComparer{TId}"/> used to compare IDs for equality.
 		/// </summary>
 		public virtual IEqualityComparer<TId> KeyComparer { get; protected set; }
+
+		/// <summary>
+		/// Implement this method to specify whether the <see cref="XIdentifier{TType, TId}"/> can provide an
+		/// ID for an object of the given <see cref="Type"/>.
+		/// </summary>
+		public abstract bool CanId(Type type);
 
 		/// <summary>
 		/// Implement this method to assign a unique object of type <typeparamref name="TId"/> to an object of

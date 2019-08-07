@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -73,7 +72,7 @@ namespace XMachine.Namers
 				{
 					throw new ArgumentNullException(nameof(type));
 				}
-				if (type.IsXIgnored())
+				if (type.IsXIgnored(true))
 				{
 					return null;
 				}
@@ -104,6 +103,15 @@ namespace XMachine.Namers
 				}
 				Put(type, value);
 			}
+		}
+
+		/// <summary>
+		/// Clear the internal caches of associations between <see cref="Type"/>s and <see cref="XName"/>s.
+		/// </summary>
+		public override void Reset()
+		{
+			typesByName.Clear();
+			namesByType.Clear();
 		}
 
 		/// <summary>
@@ -150,25 +158,17 @@ namespace XMachine.Namers
 				return;
 			}
 
-			IEnumerable<Type> toIndex = null;
-
 			try
 			{
-				toIndex = assembly.ExportedTypes
-					.Where(x => !x.IsXIgnored() &&
-						!x.IsArray && !x.IsCOMObject && !x.IsImport &&
-						(!x.IsGenericType || x.IsGenericTypeDefinition));
+				foreach (Type type in assembly.ExportedTypes.Where(x =>
+					!x.IsXIgnored() && !x.IsArray && !x.IsCOMObject && !x.IsImport &&
+					(!x.IsGenericType || x.IsGenericTypeDefinition)))
+				{
+					_ = this[type];
+				}
 			}
-			catch (Exception e)
-			{
-				ExceptionHandler(e);
-				return;
-			}
-
-			foreach (Type type in toIndex)
-			{
-				_ = this[type];
-			}
+			catch
+			{ }
 		}
 
 		/// <summary>

@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Xml.Linq;
 using XMachine.Reflection;
 
@@ -12,10 +13,15 @@ namespace XMachine
 		private static readonly Func<object, bool> completedTask = x => true;
 		private static readonly object placeHolder = new object();
 
+		private static readonly MethodInfo createObjectBuilderMethod = typeof(XReaderImpl)
+			.GetMethod(nameof(CreateObjectBuilder), BindingFlags.Instance | BindingFlags.NonPublic);
+
 		private readonly XDomain domain;
 
-		private readonly LinkedList<ObjectBuilderBox> objectBuilders = new LinkedList<ObjectBuilderBox>();
-		private readonly LinkedList<Func<bool>> compTasks = new LinkedList<Func<bool>>();
+		private readonly LinkedList<ReadTask> tasks = new LinkedList<ReadTask>();
+
+		private readonly IDictionary<Type, Func<Type, Action<object>, object>> createObjectBuilderDelegates =
+			new Dictionary<Type, Func<Type, Action<object>, object>>();
 
 		internal XReaderImpl(XDomain domain)
 		{
@@ -27,17 +33,7 @@ namespace XMachine
 		{
 			if (obj != null)
 			{
-				foreach (Func<bool> task in ForEachComponent(x =>
-					{
-						x.Submit(this, obj, out Func<bool> compTask);
-						return compTask;
-					}))
-				{
-					if (task != null)
-					{
-						_ = compTasks.AddLast(task);
-					}
-				}
+				ForEachComponent(x => x.Submit(this, obj));
 			}
 		}
 
@@ -51,6 +47,9 @@ namespace XMachine
 				}
 			}
 		}
+
+		public void AddTask(object source, Func<bool> task) =>
+			tasks.AddLast(new ReadTask(source, task ?? throw new ArgumentNullException(nameof(task))));
 
 		public override object Read(XElement element) => Read<object>(element);
 
@@ -123,9 +122,6 @@ namespace XMachine
 
 		public void Read(XElement element, Type expectedType, Func<object, bool> assign, ReaderHints hint = ReaderHints.Default)
 		{
-#if DEBUG
-			Console.WriteLine($"{nameof(XReaderImpl)} arrived at element {element?.Name} expecting {expectedType?.FullName}.");
-#endif
 			if (element == null)
 			{
 				ExceptionHandler(new ArgumentNullException("Cannot read null XElement"));
@@ -147,28 +143,17 @@ namespace XMachine
 				assign = completedTask;
 			}
 
-			// Start reading
-
-			Func<bool> task = ForEachComponent(
-				x => x.Read(this, element, expectedType, assign, out Func<bool> compTask) ? compTask : null,
-				x => x != null);
-
-			if (task != null)
-			{
-				compTasks.AddLast(task);
-				return;
-			}
-
-			// No immediate success, resolve the type
+			// Resolve the type of the object at this element
 
 			XTypeBox box = null;
 
-			if (box == null && !hint.HasFlag(ReaderHints.IgnoreElementName))
+			if (!hint.HasFlag(ReaderHints.IgnoreElementName))
 			{
 				box = domain.ReflectElement(element, expectedType, false);
 			}
 
-			// Check for an inner element that implements the expected type
+			// If the type can be subclassed, and the element consists of a single inner element that reflects to a subclass,
+			// assume we're looking at an explicitly typed object
 
 			Type expectedImpl = box == null ? expectedType : box.Type;
 
@@ -185,64 +170,72 @@ namespace XMachine
 					element = innerEl;
 				}
 			}
+
+			// Ensure we have an XType<T> to work with
+
 			if (box == null)
 			{
 				box = domain.ReflectFromType(expectedType);
 			}
 
-			if (!box.Type.CanCreateInstances())
+			if (box == null)
+			{
+				ExceptionHandler(new InvalidOperationException(
+					$"Cannot determine the type of the object at {element.Name}, expecting {expectedType.Name}."));
+				return;
+			}
+			else if (!box.Type.CanCreateInstances())
 			{
 				ExceptionHandler(new InvalidOperationException(
 					$"Cannot create an instance of the ignored or abstract type {box.Type}."));
 				return;
 			}
 
-			// Try reading again, invoking XType components
+			// Inform XReaderComponents
 
-			if (box.OnRead(this, element, expectedType, out object result))
+			if (ForEachComponent(x => box.OnComponentRead(x, this, element, assign)))
+			{
+				return;
+			}
+
+			// Inform XTypeComponents
+
+			if (box.OnRead(this, element, out object result))
 			{
 				Submit(result);
 				if (!assign(result))
 				{
-					compTasks.AddLast(() => assign(result));
+					AddTask(this, () => assign(result));
 				}
 				return;
 			}
 
-			// Still no luck, move on to an ObjectBuilder
+			// Move on to advanced reading with ObjectBuilder
 
-			ObjectBuilderBox objectBuilder = ObjectBuilderBox.Create(box.Type);
-			objectBuilder.OnConstructed = () =>
+
+			if (!createObjectBuilderDelegates.TryGetValue(box.Type, out Func<Type, Action<object>, object> cobDelegate))
 			{
-				Submit(objectBuilder.Object);
-				if (!assign(objectBuilder.Object))
+				cobDelegate = (Func<Type, Action<object>, object>)Delegate
+					.CreateDelegate(typeof(Func<Type, Action<object>, object>), this, createObjectBuilderMethod);
+				createObjectBuilderDelegates.Add(box.Type, cobDelegate);
+			}
+
+			object objectBuilder = cobDelegate(box.Type, (obj) =>
+			{
+				Submit(obj);
+				if (!assign(obj))
 				{
-					compTasks.AddLast(() => assign(objectBuilder.Object));
+					AddTask(this, () => assign(obj));
 				}
-			};
+			});
 
 			// Invoke XType components that work on object builders
 
 			box.OnBuild(this, element, objectBuilder);
-
-			// Try to finish, clean up some memory
-
-			_ = objectBuilder.TryFinish();
-			if (!objectBuilder.IsFinished)
-			{
-				objectBuilders.AddLast(objectBuilder);
-			}
-			else if (!objectBuilder.IsConstructed)
-			{
-				ExceptionHandler(new InvalidOperationException($"Failed to construct an object."));
-			}
 		}
 
 		public void Read(XAttribute attribute, Type expectedType, Func<object, bool> assign, ReaderHints hint = ReaderHints.Default)
 		{
-#if DEBUG
-			Console.WriteLine($"{nameof(XReaderImpl)} arrived at attribute {attribute?.Name} expecting {expectedType?.FullName}.");
-#endif
 			if (attribute == null)
 			{
 				ExceptionHandler(new ArgumentNullException("Cannot read null XAttribute"));
@@ -269,21 +262,6 @@ namespace XMachine
 				assign = completedTask;
 			}
 
-			// Start reading
-
-			Func<bool> task = ForEachComponent(
-				x => x.Read(this, attribute, expectedType, assign, out Func<bool> compTask) ? compTask : null,
-				x => x != null);
-
-			if (task != null)
-			{
-				if (!task())
-				{
-					compTasks.AddLast(task);
-				}
-				return;
-			}
-
 			// Get an XType
 
 			XTypeBox box = domain.ReflectFromType(expectedType);
@@ -292,14 +270,21 @@ namespace XMachine
 				return;
 			}
 
-			// Try reading again, invoking XType components
+			// Inform XReaderComponents
 
-			if (box.OnRead(this, attribute, expectedType, out object result))
+			if (ForEachComponent(x => box.OnComponentRead(x, this, attribute, assign)))
+			{
+				return;
+			}
+
+			// Inform XTypeComponents
+
+			if (box.OnRead(this, attribute, out object result))
 			{
 				Submit(result);
 				if (!assign(result))
 				{
-					compTasks.AddLast(() => assign(result));
+					AddTask(this, () => assign(result));
 				}
 				return;
 			}
@@ -311,49 +296,19 @@ namespace XMachine
 
 		internal void Finish()
 		{
-			while (objectBuilders.Count > 0 || compTasks.Count > 0)
+			while (tasks.Count > 0)
 			{
 				bool progress = false;
 
-				// Try to finish object builders
-
-				LinkedListNode<ObjectBuilderBox> obNode = objectBuilders.First;
-
-				while (obNode != null)
-				{
-					try
-					{
-						if (obNode.Value.TryFinish())
-						{
-							progress = true;
-						}
-					}
-					catch (Exception e)
-					{
-						ExceptionHandler(e);
-					}
-
-					if (obNode.Value.IsFinished)
-					{
-						if (!obNode.Value.IsConstructed)
-						{
-							ExceptionHandler(new InvalidOperationException($"Failed to construct an object."));
-						}
-
-						obNode.List.Remove(obNode);
-					}
-					obNode = obNode.Next;
-				}
-
 				// Try to finish tasks
 
-				LinkedListNode<Func<bool>> taskNode = compTasks.First;
+				LinkedListNode<ReadTask> taskNode = tasks.First;
 
 				while (taskNode != null)
 				{
 					try
 					{
-						if (taskNode.Value())
+						if (taskNode.Value.Invoke())
 						{
 							progress = true;
 							taskNode.List.Remove(taskNode);
@@ -363,6 +318,7 @@ namespace XMachine
 					{
 						ExceptionHandler(e);
 						taskNode.List.Remove(taskNode);
+						progress = true;
 					}
 
 					taskNode = taskNode.Next;
@@ -370,18 +326,24 @@ namespace XMachine
 
 				// Break if we haven't made any progress
 
-				if (!progress && (objectBuilders.Count > 0 || compTasks.Count > 0))
+				if (!progress && tasks.Count > 0)
 				{
 					ExceptionHandler(new InvalidOperationException(
-						$"{typeof(XReaderImpl)} finished without completing {objectBuilders.Count} objects."));
+						$"{typeof(XReaderImpl)} finished without completing all tasks."));
+					if (tasks.Count > 0)
+					{
+						ExceptionHandler(new InvalidOperationException($"{tasks.Count} unfinished component tasks from sources: " +
+							string.Join(";", tasks.Select(x => x.Source).Where(x => x != null))));
+					}
 					break;
 				}
 			}
 
 			// Reset the reader
 
-			objectBuilders.Clear();
-			compTasks.Clear();
+			tasks.Clear();
+
+			createObjectBuilderDelegates.Clear();
 		}
 
 		private T CastResult<T>(object result)
@@ -399,9 +361,16 @@ namespace XMachine
 				return (T)result;
 			}
 
-			ExceptionHandler(new InvalidCastException($"Read object as Type {result.GetType().FullName}, " +
+			ExceptionHandler(new InvalidCastException($"Read an object as Type {result.GetType().FullName}, " +
 				$"which is not assignable to expected type {typeof(T).FullName}."));
 			return default;
 		}
+
+		private object CreateObjectBuilder(Type type, Action<object> onConstructed) =>
+			typeof(ObjectBuilder<>)
+				.MakeGenericType(type)
+				.GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance)
+				.FirstOrDefault()
+				.Invoke(new object[] { onConstructed });
 	}
 }

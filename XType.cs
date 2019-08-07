@@ -65,37 +65,37 @@ namespace XMachine
 
 		internal void Initialize() => ForEachComponent((comp) => comp.Initialize(this));
 
-		internal bool Read(IXReadOperation reader, XElement element, Type expectedType, out T result)
+		internal bool Read(IXReadOperation reader, XElement element, out T result)
 		{
 			T compResult = default;
-			if (ForEachComponent((comp) => comp.Read(this, reader, element, expectedType, out compResult)))
+			if (ForEachComponent(x => x.Read(this, reader, element, out compResult)))
 			{
 				result = compResult;
 				return true;
 			}
-			result = default;
+			result = compResult;
 			return false;
 		}
 
-		internal bool Read(IXReadOperation reader, XAttribute attribute, Type expectedType, out T result)
+		internal bool Read(IXReadOperation reader, XAttribute attribute, out T result)
 		{
 			T compResult = default;
-			if (ForEachComponent((comp) => comp.Read(this, reader, attribute, expectedType, out compResult)))
+			if (ForEachComponent(x => x.Read(this, reader, attribute, out compResult)))
 			{
 				result = compResult;
 				return true;
 			}
-			result = default;
+			result = compResult;
 			return false;
 		}
 
 		internal void Build(IXReadOperation reader, XElement element, ObjectBuilder<T> objectBuilder) =>
-			ForEachComponent((comp) => comp.Build(this, reader, element, objectBuilder));
+			ForEachComponent(x => x.Build(this, reader, element, objectBuilder));
 
 		internal bool Write(IXWriteOperation writer, T obj, XElement element) =>
-			ForEachComponent((comp) => comp.Write(this, writer, obj, element));
+			ForEachComponent(x => x.Write(this, writer, obj, element));
 
 		internal bool Write(IXWriteOperation writer, T obj, XAttribute attribute) =>
-			ForEachComponent((comp) => comp.Write(this, writer, obj, attribute));
+			ForEachComponent(x => x.Write(this, writer, obj, attribute));
 	}
 }

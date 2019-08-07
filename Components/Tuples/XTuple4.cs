@@ -90,7 +90,7 @@ namespace XMachine.Components.Tuples
 				found4 = true;
 			}
 
-			objectBuilder.AddTask(() =>
+			reader.AddTask(this, () =>
 			{
 				if (found1 && found2 && found3 && found4)
 				{
