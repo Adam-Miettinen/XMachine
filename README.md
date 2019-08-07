@@ -28,7 +28,7 @@ XMachine expands on the built-in serializer in several ways:
 
 * XMachine does not use reflection emit or dynamic assemblies, so it must be run in a trust environment that has reflection permissions enabled.
 * It does not support encryption/decryption.
-* It cannot serialize `ref readonly struct` types
+* It cannot (automatically) serialize `ref readonly struct` types
 
 Most of XMachine's functionality is extensible with [components](https://github.com/Adam-Miettinen/XMachine/wiki/Components), making it relatively easy to add features as needed.
 
