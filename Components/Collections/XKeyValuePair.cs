@@ -8,7 +8,7 @@ namespace XMachine.Components.Collections
 		internal XKeyValuePair() { }
 
 		protected override void OnBuild(XType<KeyValuePair<TKey, TValue>> xType, IXReadOperation reader,
-			XElement element, ObjectBuilder<KeyValuePair<TKey, TValue>> objectBuilder)
+			XElement element, ObjectBuilder<KeyValuePair<TKey, TValue>> objectBuilder, XObjectArgs args)
 		{
 			XName keyName = XComponents.Component<XAutoCollections>().KeyName,
 				valueName = XComponents.Component<XAutoCollections>().ValueName;
@@ -28,7 +28,7 @@ namespace XMachine.Components.Collections
 				key = x;
 				return foundKey = true;
 			},
-			ReaderHints.IgnoreElementName);
+			XObjectArgs.DefaultIgnoreElementName);
 
 			XElement valueElement = element.Element(valueName);
 			if (valueElement != null)
@@ -38,7 +38,7 @@ namespace XMachine.Components.Collections
 					value = x;
 					return foundValue = true;
 				},
-				ReaderHints.IgnoreElementName);
+				XObjectArgs.DefaultIgnoreElementName);
 			}
 			else
 			{
@@ -57,7 +57,7 @@ namespace XMachine.Components.Collections
 		}
 
 		protected override bool OnWrite(XType<KeyValuePair<TKey, TValue>> xType, IXWriteOperation writer,
-			KeyValuePair<TKey, TValue> obj, XElement element)
+			KeyValuePair<TKey, TValue> obj, XElement element, XObjectArgs args)
 		{
 			XName keyName = XComponents.Component<XAutoCollections>().KeyName,
 				valueName = XComponents.Component<XAutoCollections>().ValueName;

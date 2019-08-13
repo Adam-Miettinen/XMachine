@@ -6,7 +6,8 @@ using XMachine.Reflection;
 namespace XMachine.Components.Constructors
 {
 	/// <summary>
-	/// This extension manages the selection of parameterless constructors for types.
+	/// An <see cref="XMachineComponent"/> that searches for and assigns parameterless constructors
+	/// to <see cref="XType{T}"/>s.
 	/// </summary>
 	public sealed class XAutoConstructors : XMachineComponent
 	{
@@ -17,18 +18,29 @@ namespace XMachine.Components.Constructors
 		internal XAutoConstructors() { }
 
 		/// <summary>
-		/// Get or set a <see cref="ConstructorAccess"/> bitflag that determines the access level a parameterless
-		/// constructor must have for it to be used to construct an object read from XML. By default,
-		/// parameterless constructors must be public. Altering this value will not change the treatment of
-		/// types defined in Microsoft core libraries, types defined in an assemly tagged with 
-		/// <see cref="XMachineAssemblyAttribute"/>, or any types that have already been reflected (read or
-		/// written).
+		/// Get or set a <see cref="MethodAccess"/> bitflag that determines the access level a parameterless
+		/// constructor must have for it to be used to construct an object read from XML.
 		/// </summary>
-		public ConstructorAccess AccessIncluded { get; set; }
+		public MethodAccess AccessIncluded { get; set; }
 
 		/// <summary>
-		/// Finds a suitable constructor and assigns it
+		/// Get the <see cref="MethodAccess"/> level used by this component for the type <typeparamref name="T"/>.
 		/// </summary>
+		/// <returns>A <see cref="MethodAccess"/> instance.</returns>
+		public MethodAccess GetAccessLevel<T>()
+		{
+			Type type = typeof(T);
+			if (type.Assembly == typeof(object).Assembly)
+			{
+				return MethodAccess.Public;
+			}
+			else
+			{
+				XMachineAssemblyAttribute xma = type.Assembly.GetCustomAttribute<XMachineAssemblyAttribute>();
+				return xma == null ? AccessIncluded : xma.ConstructorAccess;
+			}
+		}
+
 		protected override void OnCreateXType<T>(XType<T> xType)
 		{
 			base.OnCreateXType(xType);
@@ -40,36 +52,33 @@ namespace XMachine.Components.Constructors
 				return;
 			}
 
-			ConstructorAccess ctorAccess = GetAccessLevel<T>();
-
-			if (type.GetConstructor(Type.EmptyTypes) != null || type.IsValueType)
+			if (type.GetConstructor(Type.EmptyTypes) != null)
 			{
-				xType.Register(new XConstructor<T>(
+				xType.Register(new XConstructor<T>(xType,
 					(Func<T>)makePublicParameterlessConstructorDelegate.MakeGenericMethod(typeof(T)).Invoke(this, null)));
+				return;
 			}
-			else if (ctorAccess != ConstructorAccess.Public)
+
+			MethodAccess ctorAccess = GetAccessLevel<T>();
+
+			if (ctorAccess != MethodAccess.Public)
 			{
 				ConstructorInfo ci = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault(x =>
-						!x.IsXIgnored(true, true) &&
 						x.GetParameters().Length == 0 &&
-						((x.IsFamilyOrAssembly && ctorAccess.HasFlag(ConstructorAccess.ProtectedInternal)) ||
-						(x.IsAssembly && ctorAccess.HasFlag(ConstructorAccess.Internal)) ||
-						(x.IsFamily && ctorAccess.HasFlag(ConstructorAccess.Protected)) ||
-						(x.IsFamilyAndAssembly && ctorAccess.HasFlag(ConstructorAccess.PrivateProtected)) ||
-						(x.IsPrivate && ctorAccess.HasFlag(ConstructorAccess.Private))));
+						((x.IsFamilyOrAssembly && ctorAccess.HasFlag(MethodAccess.ProtectedInternal)) ||
+						(x.IsAssembly && ctorAccess.HasFlag(MethodAccess.Internal)) ||
+						(x.IsFamily && ctorAccess.HasFlag(MethodAccess.Protected)) ||
+						(x.IsFamilyAndAssembly && ctorAccess.HasFlag(MethodAccess.PrivateProtected)) ||
+						(x.IsPrivate && ctorAccess.HasFlag(MethodAccess.Private))));
 
 				if (ci != null)
 				{
-					xType.Register(new XConstructor<T>(() => (T)ci.Invoke(null)));
+					xType.Register(new XConstructor<T>(xType, () => (T)ci.Invoke(null)));
 				}
 			}
 		}
 
-		/// <summary>
-		/// Disable <see cref="XConstructor{T}"/> component for types that have an <see cref="XTexter{T}"/> or
-		/// <see cref="XBuilderComponent{T}"/>.
-		/// </summary>
 		protected override void OnCreateXTypeLate<T>(XType<T> xType)
 		{
 			if (xType.Components<XTexter<T>>().Any(x => x.Enabled) ||
@@ -86,23 +95,8 @@ namespace XMachine.Components.Constructors
 		internal bool ConstructorEligible<T>(XType<T> xType)
 		{
 			Type type = typeof(T);
-
-			return type.CanCreateInstances() && !type.IsArray && !XDefaultTypes.IsDefaultType(type) &&
+			return type.CanCreateInstances() && !type.IsValueType && !type.IsArray && !XDefaultTypes.IsDefaultType(type) &&
 				xType.Component<XTexter<T>>() == null && xType.Component<XBuilderComponent<T>>() == null;
-		}
-
-		internal ConstructorAccess GetAccessLevel<T>()
-		{
-			Type type = typeof(T);
-			if (type.Assembly == typeof(object).Assembly)
-			{
-				return ConstructorAccess.Public;
-			}
-			else
-			{
-				XMachineAssemblyAttribute xma = type.Assembly.GetCustomAttribute<XMachineAssemblyAttribute>();
-				return xma == null ? AccessIncluded : xma.ConstructorAccess;
-			}
 		}
 
 		private Func<T> MakePublicParameterlessConstructorDelegate<T>() where T : new() => () => new T();

@@ -4,8 +4,8 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XQueue<TQueue, TItem> : XCollection<TQueue, TItem> where TQueue : Queue<TItem>
 	{
-		internal XQueue() { }
+		internal XQueue(XType<TQueue> xType) : base(xType) { }
 
-		protected override void AddItem(TQueue collection, TItem item) => collection.Enqueue(item);
+		protected override void AddItem(TQueue collection, int index, TItem item) => collection.Enqueue(item);
 	}
 }

@@ -1,17 +1,26 @@
-﻿using System.Xml.Linq;
+﻿using System;
+using System.Xml.Linq;
 
 namespace XMachine.Components
 {
 	internal sealed class XBuilderComponent<T> : XTypeComponent<T>
 	{
-		internal XBuilderComponent(XBuilder<T> builder) => Builder = builder;
+		private XBuilder<T> builder;
 
-		internal XBuilder<T> Builder { get; set; }
+		internal XBuilderComponent(XType<T> xType, XBuilder<T> builder) : base(xType) =>
+			Builder = builder;
 
-		protected override void OnBuild(XType<T> xType, IXReadOperation reader, XElement element, ObjectBuilder<T> objectBuilder) =>
-			Builder.Build(xType, reader, element, objectBuilder);
+		internal XBuilder<T> Builder
+		{
+			get => builder;
+			set => builder = value ?? throw new ArgumentNullException(nameof(value));
+		}
 
-		protected override bool OnWrite(XType<T> xType, IXWriteOperation writer, T obj, XElement element) =>
-			Builder.Write(xType, writer, obj, element);
+		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<T>
+			objectBuilder, XObjectArgs args) =>
+			Builder.Build(XType, reader, element, objectBuilder, args);
+
+		protected override bool OnWrite(IXWriteOperation writer, T obj, XElement element, XObjectArgs args) =>
+			Builder.Write(XType, writer, obj, element, args);
 	}
 }

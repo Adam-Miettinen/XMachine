@@ -4,7 +4,8 @@ using System.Xml.Linq;
 namespace XMachine.Components.Constructors
 {
 	/// <summary>
-	/// An <see cref="XTypeComponent{T}"/> representing a parameterless constructor
+	/// An <see cref="XTypeComponent{T}"/> that uses a parameterless constructor to construct
+	/// instances of serialized objects of type <typeparamref name="T"/>.
 	/// </summary>
 	public sealed class XConstructor<T> : XTypeComponent<T>
 	{
@@ -13,10 +14,13 @@ namespace XMachine.Components.Constructors
 		/// <summary>
 		/// Create a new <see cref="XConstructor{T}"/> using the given delegate.
 		/// </summary>
-		public XConstructor(Func<T> constructor) => Constructor = constructor;
+		/// <param name="xType">The <see cref="XType{T}"/> object to which this <see cref="XTypeComponent{T}"/> belongs.</param>
+		/// <param name="constructor">The delegate to use as a constructor.</param>
+		public XConstructor(XType<T> xType, Func<T> constructor) : base(xType) =>
+			Constructor = constructor;
 
 		/// <summary>
-		/// Get or set the constructor delegate
+		/// Get or set the constructor delegate.
 		/// </summary>
 		public Func<T> Constructor
 		{
@@ -24,21 +28,13 @@ namespace XMachine.Components.Constructors
 			set => constructor = value ?? throw new ArgumentNullException("Cannot use null delegate");
 		}
 
-		/// <summary>
-		/// Add the constructor as a builder task.
-		/// </summary>
-		protected override void OnBuild(XType<T> xType, IXReadOperation reader, XElement element, ObjectBuilder<T> objectBuilder)
+		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<T> objectBuilder,
+			XObjectArgs args)
 		{
-			if (!objectBuilder.IsConstructed)
+			if ((args == null || !args.Hints.HasFlag(ObjectHints.DontConstruct)) &&
+				!objectBuilder.IsConstructed)
 			{
-				reader.AddTask(this, () =>
-				{
-					if (!objectBuilder.IsConstructed)
-					{
-						objectBuilder.Object = constructor();
-					}
-					return true;
-				});
+				objectBuilder.Object = Constructor();
 			}
 		}
 	}

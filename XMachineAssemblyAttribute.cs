@@ -1,28 +1,28 @@
 ﻿using System;
 using System.Reflection;
-using XMachine.Components.Constructors;
-using XMachine.Components.Properties;
 
 namespace XMachine
 {
 	/// <summary>
-	/// Assemblies that wish to use attributes to customize how <see cref="XMachine"/> reads and writes
-	/// XML must tag themselves with this attribute. Simply add <c>[assembly: XMachine.XMachineAssembly]</c> 
-	/// to any file in your project.
+	/// Developers can add <c>[assembly: XMachine.XMachineAssembly]</c> to any file in their project to tag
+	/// their assembly with <see cref="XMachineAssemblyAttribute"/>. The <see cref="Type"/>s exported from
+	/// a tagged assembly will be scanned by <see cref="XNamer"/> and <see cref="XMachineComponent"/>s. This
+	/// attribute's properties can be used to customize default access levels for constructors and properties
+	/// defined in the tagged assembly.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
 	public sealed class XMachineAssemblyAttribute : Attribute
 	{
 		/// <summary>
-		/// Get or set the recommended property access level for <see cref="Type"/>s defined in this
-		/// <see cref="Assembly"/>.
+		/// Get or set the recommended <see cref="XMachine.MemberAccess"/> level for <see cref="Type"/>s 
+		/// defined in this <see cref="Assembly"/>.
 		/// </summary>
-		public PropertyAccess PropertyAccess { get; set; }
+		public MemberAccess PropertyAccess { get; set; }
 
 		/// <summary>
-		/// Get or set the recommended constructor access level for <see cref="Type"/>s defined in this
-		/// <see cref="Assembly"/>.
+		/// Get or set the recommended <see cref="XMachine.MethodAccess"/> level for <see cref="Type"/>s 
+		/// defined in this <see cref="Assembly"/>.
 		/// </summary>
-		public ConstructorAccess ConstructorAccess { get; set; }
+		public MethodAccess ConstructorAccess { get; set; }
 	}
 }

@@ -10,7 +10,7 @@ namespace XMachine.Reflection
 	/// check provided arguments against that method's parameter constraints and to construct generic methods
 	/// with type arguments discovered from provided argument types.
 	/// </summary>
-	internal sealed class MethodArgumentsMap : IEquatable<MethodArgumentsMap>
+	public sealed class MethodArgumentsMap : IEquatable<MethodArgumentsMap>
 	{
 		private readonly Type[] parameterTypes;
 
@@ -20,8 +20,7 @@ namespace XMachine.Reflection
 		/// Create a new <see cref="MethodArgumentsMap"/> for the given method, generating a mapping
 		/// between its parameters and its generic type arguments. Throws an <see cref="InvalidOperationException"/>
 		/// if the method signature is such that the generic type arguments cannot be discovered from the
-		/// parameter types alone -- for example, if one of the generic type arguments appears only in a 
-		/// constraint on another generic type argument.
+		/// parameter types alone.
 		/// </summary>
 		public MethodArgumentsMap(MethodInfo method)
 		{
@@ -40,7 +39,7 @@ namespace XMachine.Reflection
 				return;
 			}
 
-			// Create a mapping function for generic methods
+			// For generic methods, create a mapping function:
 
 			MethodDefinition = method.GetGenericMethodDefinition();
 			parameterTypes = MethodDefinition.GetParameters()
@@ -56,8 +55,8 @@ namespace XMachine.Reflection
 		}
 
 		/// <summary>
-		/// Get the <see cref="MethodInfo"/> object that represents this method (for a non-generic method)
-		/// or its generic method definition.
+		/// Get the <see cref="MethodInfo"/> object that represents either this method or, for a generic method,
+		/// its generic method definition.
 		/// </summary>
 		public MethodInfo MethodDefinition { get; }
 
@@ -65,6 +64,8 @@ namespace XMachine.Reflection
 		/// Checks that the given argument types satisfy all constraints on the method's parameters, meaning that
 		/// an invokable generic method can be constructed from arguments of these types.
 		/// </summary>
+		/// <param name="arguments">The <see cref="Type"/>s of the arguments being passed. Must be non-null.</param>
+		/// <returns>True if all constraints are satisfied, false otherwise.</returns>
 		public bool CanConstructMethodFor(params Type[] arguments)
 		{
 			if (arguments == null)
@@ -125,9 +126,11 @@ namespace XMachine.Reflection
 
 		/// <summary>
 		/// Constructs an invokable generic method, discovering the method's generic type arguments from the types
-		/// of arguments given. If <see cref="CanConstructMethodFor(Type[])"/> returns <c>false</c> on these
-		/// argument types, this method returns null.
+		/// of arguments given.
 		/// </summary>
+		/// <param name="arguments">The <see cref="Type"/>s of the arguments to be passed to the constructed method. 
+		/// Must be non-null.</param>
+		/// <returns>A <see cref="MethodInfo"/> representing the constructed method.</returns>
 		public MethodInfo MakeGenericMethod(params Type[] arguments)
 		{
 			if (!CanConstructMethodFor(arguments))
@@ -161,10 +164,13 @@ namespace XMachine.Reflection
 		}
 
 		/// <summary>
-		/// Construct and invoke this method definition on the given arguments, return the result. Throws an
-		/// <see cref="InvalidOperationException"/> if the method cannot be constructed from the given arguments'
-		/// types.
+		/// Constructs and invokes a generic method, discovering the method's generic type arguments from the types
+		/// of arguments given.
 		/// </summary>
+		/// <param name="target">The target object to invoke the method on, or <c>null</c> for a static method.</param>
+		/// <param name="arguments">The <see cref="Type"/>s of the arguments to be passed to the constructed method. 
+		/// Must be non-null.</param>
+		/// <returns>An <see cref="object"/> containing the return value of the invoked method.</returns>
 		public object Invoke(object target, params object[] arguments)
 		{
 			if ((arguments == null && parameterTypes.Length > 0) ||
@@ -198,10 +204,14 @@ namespace XMachine.Reflection
 		}
 
 		/// <summary>
-		/// Attempt to discover the generic type arguments of <see cref="MethodDefinition"/> from the types of the
-		/// supplied arguments, and if possible, invoke a constructed version of the method on the given target
-		/// using the given arguments.
+		/// Try to construct and invoke a generic method, discovering the method's generic type arguments from the types
+		/// of arguments given.
 		/// </summary>
+		/// <param name="returnValue">The return value of the method if invocation was successful.</param>
+		/// <param name="target">The target object to invoke the method on, or <c>null</c> for a static method.</param>
+		/// <param name="arguments">The <see cref="Type"/>s of the arguments to be passed to the constructed method. 
+		/// Must be non-null.</param>
+		/// <returns><c>True</c> if the method was successfully constructed and invoked, <c>false</c> otherwise.</returns>
 		public bool TryInvoke(out object returnValue, object target, params object[] arguments)
 		{
 			if ((arguments == null && parameterTypes.Length > 0) ||
@@ -237,10 +247,13 @@ namespace XMachine.Reflection
 		}
 
 		/// <summary>
-		/// Attempt to discover the generic type arguments of <see cref="MethodDefinition"/> from the types of the
-		/// supplied arguments, and if possible, invoke a constructed version of the method on the given target
-		/// using the given arguments.
+		/// Try to construct and invoke a generic method, discovering the method's generic type arguments from the types
+		/// of arguments given.
 		/// </summary>
+		/// <param name="target">The target object to invoke the method on, or <c>null</c> for a static method.</param>
+		/// <param name="arguments">The <see cref="Type"/>s of the arguments to be passed to the constructed method. 
+		/// Must be non-null.</param>
+		/// <returns><c>True</c> if the method was successfully constructed and invoked, <c>false</c> otherwise.</returns>
 		public bool TryInvoke(object target, params object[] arguments)
 		{
 			if ((arguments == null && parameterTypes.Length > 0) ||
@@ -262,22 +275,26 @@ namespace XMachine.Reflection
 		/// <summary>
 		/// True if <paramref name="other"/> has the same <see cref="MethodDefinition"/> property.
 		/// </summary>
+		/// <param name="other">A <see cref="MethodArgumentsMap"/> for comparison.</param>
 		public bool Equals(MethodArgumentsMap other) => MethodDefinition == other?.MethodDefinition;
 
 		/// <summary>
 		/// True if <paramref name="obj"/> is a <see cref="MethodArgumentsMap"/> with an equal 
 		/// <see cref="MethodDefinition"/> property.
 		/// </summary>
+		/// <param name="obj">An <see cref="object"/> for comparison.</param>
 		public override bool Equals(object obj) => obj is MethodArgumentsMap map && Equals(map);
 
 		/// <summary>
-		/// Return a hashcode based on <see cref="MethodDefinition"/>.
+		/// Get a hashcode based on <see cref="MethodDefinition"/>.
 		/// </summary>
+		/// <returns>A hashcode based on <see cref="MethodDefinition"/>.</returns>
 		public override int GetHashCode() => MethodDefinition.GetHashCode();
 
 		/// <summary>
-		/// Returns the string representation of <see cref="MethodDefinition"/>.
+		/// Get the string representation of <see cref="MethodDefinition"/>.
 		/// </summary>
+		/// <returns>A string based on <see cref="MethodDefinition"/>.</returns>
 		public override string ToString() => MethodDefinition.ToString();
 
 		// Look for the method generic parameter in its arguments and create a delegate telling us how to navigate

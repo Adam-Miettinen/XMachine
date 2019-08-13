@@ -1,63 +1,34 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Xml.Linq;
+using XMachine.Components.Constructors;
 
 namespace XMachine.Components.Collections
 {
 	internal sealed class XReadOnlyDictionary<TKey, TValue> :
 		XCollection<ReadOnlyDictionary<TKey, TValue>, KeyValuePair<TKey, TValue>>
 	{
-		internal XReadOnlyDictionary() { }
+		internal XReadOnlyDictionary(XType<ReadOnlyDictionary<TKey, TValue>> xType) : base(xType) { }
 
-		protected override void AddItem(ReadOnlyDictionary<TKey, TValue> collection, KeyValuePair<TKey, TValue> item) { }
-
-		protected override void OnBuild(XType<ReadOnlyDictionary<TKey, TValue>> xType, IXReadOperation reader, XElement element,
-			ObjectBuilder<ReadOnlyDictionary<TKey, TValue>> objectBuilder)
+		protected override void OnInitialized()
 		{
-			if (!element.HasElements)
+			base.OnInitialized();
+			XConstructor<ReadOnlyDictionary<TKey, TValue>> ctor = XType.Component<XConstructor<ReadOnlyDictionary<TKey, TValue>>>();
+			if (ctor != null)
 			{
-				return;
+				ctor.Enabled = false;
 			}
+		}
 
-			IEnumerable<XElement> itemElements = ItemsAsElements ? element.Elements() : element.Elements(ItemName);
+		protected override void AddItem(ReadOnlyDictionary<TKey, TValue> collection, int index, KeyValuePair<TKey, TValue> item) { }
 
-			if (!itemElements.Any())
-			{
-				return;
-			}
-
-			object[] items = Enumerable.Repeat(PlaceholderObject, itemElements.Count()).ToArray();
-
-			int i = 0;
-
-			foreach (XElement subElement in itemElements)
-			{
-				int idx = i++;
-				reader.Read<KeyValuePair<TKey, TValue>>(subElement, x =>
+		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<ReadOnlyDictionary<TKey, TValue>> objectBuilder,
+			XObjectArgs args) =>
+			reader.Read<Dictionary<TKey, TValue>>(element, x =>
 				{
-					items[idx] = x;
+					objectBuilder.Object = new ReadOnlyDictionary<TKey, TValue>(x);
 					return true;
 				},
-				ReaderHints.IgnoreElementName);
-			}
-
-			reader.AddTask(this, () =>
-			{
-				if (items.All(x => !ReferenceEquals(x, PlaceholderObject)))
-				{
-					IDictionary<TKey, TValue> dict = new Dictionary<TKey, TValue>(items.Length);
-
-					foreach (KeyValuePair<TKey, TValue> kv in items.Cast<KeyValuePair<TKey, TValue>>())
-					{
-						dict.Add(kv.Key, kv.Value);
-					}
-
-					objectBuilder.Object = new ReadOnlyDictionary<TKey, TValue>(dict);
-					return true;
-				}
-				return false;
-			});
-		}
+				args ?? XObjectArgs.DefaultIgnoreElementName);
 	}
 }

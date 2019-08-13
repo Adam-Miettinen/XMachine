@@ -4,33 +4,38 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Xml.Linq;
+using XMachine.Components.Constructors;
 using XMachine.Reflection;
 
 namespace XMachine.Components.Properties
 {
 	/// <summary>
-	/// Enables the reading and writing of object properties by <see cref="XType{TType}"/>s.
+	/// An <see cref="XTypeComponent{T}"/> that conducts the reading and writing of properties defined
+	/// on an object of type <typeparamref name="TType"/>, as well as the construction of those
+	/// objects using parameterized constructors.
 	/// </summary>
 	public sealed class XProperties<TType> : XTypeComponent<TType>
 	{
-		private static readonly object placeHolder = new object();
+		private static readonly MethodInfo addPropertyMethod = typeof(XProperties<TType>)
+			.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+			.FirstOrDefault(x => x.IsGenericMethodDefinition && x.Name == nameof(AddAutoProperty));
 
-		/// <summary>
-		/// An optional predicate affecting all properties.
-		/// </summary>
-		public Predicate<TType> WriteIf { get; set; }
-
-		internal IDictionary<XName, XPropertyBox<TType>> Properties { get; } =
+		private readonly IDictionary<XName, XPropertyBox<TType>> properties =
 			new Dictionary<XName, XPropertyBox<TType>>();
 
-		internal XName[] ConstructWithNames { get; set; }
+		private XName[] constructWithNames;
 
-		internal Func<IDictionary<XName, object>, TType> ConstructorMethod { get; set; }
+		private Func<IDictionary<XName, object>, TType> constructorMethod;
+
+		private List<PropertyInfo> candidateProperties;
+
+		internal XProperties(XType<TType> xType, List<PropertyInfo> properties) : base(xType) =>
+			candidateProperties = properties;
 
 		/// <summary>
-		/// Add a new property of the given type, represented by an <see cref="XProperty{TType, TProperty}"/>
-		/// object.
+		/// Add a new property of the given type, represented by an <see cref="XProperty{TType, TProperty}"/>.
 		/// </summary>
+		/// <param name="property">The <see cref="XProperty{TType, TProperty}"/> to add.</param>
 		public void Add<TProperty>(XProperty<TType, TProperty> property)
 		{
 			if (property == null)
@@ -41,64 +46,71 @@ namespace XMachine.Components.Properties
 			{
 				throw new ArgumentException("Property must have a valid XName");
 			}
-			if (Properties.ContainsKey(property.Name))
+			if (properties.ContainsKey(property.Name))
 			{
 				throw new ArgumentException($"Component already has a property with XName {property.Name}.");
 			}
-			Properties.Add(property.Name, XPropertyBox<TType>.Box(property));
+			properties.Add(property.Name, XPropertyBox<TType>.Box(property));
 		}
 
 		/// <summary>
 		/// Removes the given property.
 		/// </summary>
+		/// <param name="property">The <see cref="XProperty{TType, TProperty}"/> to remove.</param>
 		public void Remove<TProperty>(XProperty<TType, TProperty> property)
 		{
 			if (property != null &&
 				property.Name != null &&
-				Properties.TryGetValue(property.Name, out XPropertyBox<TType> existing) &&
+				properties.TryGetValue(property.Name, out XPropertyBox<TType> existing) &&
 				Equals(property, XPropertyBox<TType>.Unbox<TProperty>(existing)))
 			{
-				_ = Properties.Remove(property.Name);
+				_ = properties.Remove(property.Name);
 			}
 		}
 
 		/// <summary>
-		/// Removes the property with the given <see cref="XName"/>.
+		/// Removes the given property.
 		/// </summary>
+		/// <param name="propertyName">The <see cref="XName"/> of the property to remove.</param>
 		public void Remove(XName propertyName)
 		{
 			if (propertyName == null)
 			{
 				throw new ArgumentNullException("XName cannot be null");
 			}
-			_ = Properties.Remove(propertyName);
+			_ = properties.Remove(propertyName);
 		}
 
 		/// <summary>
-		/// Retrieves the property of the given type and with the given <see cref="XName"/>.
+		/// Get the property with the type <typeparamref name="TProperty"/> and with the given <see cref="XName"/>.
 		/// </summary>
+		/// <param name="name">The <see cref="XName"/> of the <see cref="XProperty{TType, TProperty}"/> to get.</param>
+		/// <returns>An <see cref="XProperty{TType, TProperty}"/> instance, or null.</returns>
 		public XProperty<TType, TProperty> Get<TProperty>(XName name)
 		{
 			if (name == null)
 			{
 				throw new ArgumentNullException("XName cannot be null");
 			}
-			return Properties.TryGetValue(name, out XPropertyBox<TType> value)
+			return properties.TryGetValue(name, out XPropertyBox<TType> value)
 				? XPropertyBox<TType>.Unbox<TProperty>(value)
 				: null;
 		}
 
 		/// <summary>
-		/// Retrieve the property identified by the given LINQ expression if it exists on this object and has
+		/// Get the property identified by the given LINQ expression if it exists on this object and has
 		/// the default <see cref="XName"/>.
 		/// </summary>
+		/// <param name="expression">A LINQ expression showing the access of the requested property by an object
+		/// of type <typeparamref name="TType"/>.</param>
+		/// <returns>An <see cref="XProperty{TType, TProperty}"/> instance, or null.</returns>
 		public XProperty<TType, TProperty> Get<TProperty>(Expression<Func<TType, TProperty>> expression)
 		{
 			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(expression);
 
 			if (mi != null)
 			{
-				if (Properties.TryGetValue(mi.GetXmlNameFromAttributes() ?? mi.Name, out XPropertyBox<TType> value))
+				if (properties.TryGetValue(mi.GetXmlNameFromAttributes() ?? mi.Name, out XPropertyBox<TType> value))
 				{
 					XProperty<TType, TProperty> property = XPropertyBox<TType>.Unbox<TProperty>(value);
 					if (property != null)
@@ -114,12 +126,12 @@ namespace XMachine.Components.Properties
 		}
 
 		/// <summary>
-		/// Removes any parametered constructor from the component.
+		/// Clear the parameterized constructor.
 		/// </summary>
 		public void ConstructWith()
 		{
-			ConstructWithNames = null;
-			ConstructorMethod = null;
+			constructWithNames = null;
+			constructorMethod = null;
 		}
 
 		/// <summary>
@@ -127,6 +139,8 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes a single parameter of type <typeparamref name="TArg1"/> with a 
 		/// name equal to the given property's (ignoring case).
 		/// </summary>
+		/// <param name="expression1">A LINQ expression identifying the first parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1>(Expression<Func<TType, TArg1>> expression1,
 			Func<TArg1, TType> constructor = null)
 		{
@@ -144,12 +158,14 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes a single parameter of type <typeparamref name="TArg1"/> with a 
 		/// name equal to the given property's (ignoring case).
 		/// </summary>
+		/// <param name="property1">An <see cref="XProperty{TType, TProperty}"/> to use as the first parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1>(XProperty<TType, TArg1> property1,
 			Func<TArg1, TType> constructor = null)
 		{
 			XName arg1 = property1?.Name;
 			if (arg1 == null ||
-				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -181,8 +197,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			ConstructWithNames = new XName[] { property1 };
-			ConstructorMethod = (args) => constructor((TArg1)args[property1]);
+			constructWithNames = new XName[] { property1 };
+			constructorMethod = (args) => constructor((TArg1)args[property1]);
 		}
 
 		/// <summary>
@@ -190,6 +206,9 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes two parameters that match the order, types and names (case insensitive) 
 		/// of the two properties given.
 		/// </summary>
+		/// <param name="expression1">A LINQ expression identifying the first parameter.</param>
+		/// <param name="expression2">A LINQ expression identifying the second parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1, TArg2>(Expression<Func<TType, TArg1>> expression1,
 			Expression<Func<TType, TArg2>> expression2,
 			Func<TArg1, TArg2, TType> constructor = null)
@@ -208,16 +227,19 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes two parameters that match the order, types and names (case insensitive) 
 		/// of the two properties given.
 		/// </summary>
+		/// <param name="property1">An <see cref="XProperty{TType, TProperty}"/> to use as the first parameter.</param>
+		/// <param name="property2">An <see cref="XProperty{TType, TProperty}"/> to use as the second parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1, TArg2>(XProperty<TType, TArg1> property1,
 			XProperty<TType, TArg2> property2,
 			Func<TArg1, TArg2, TType> constructor = null)
 		{
 			XName arg1 = property1?.Name, arg2 = property2?.Name;
 			if (arg1 == null ||
-				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing) ||
 				arg2 == null ||
-				!Properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
+				!properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
 				property2 != XPropertyBox<TType>.Unbox<TArg2>(arg2Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -251,8 +273,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			ConstructWithNames = new XName[] { property1, property2 };
-			ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2]);
+			constructWithNames = new XName[] { property1, property2 };
+			constructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2]);
 		}
 
 		/// <summary>
@@ -260,6 +282,10 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes three parameters that match the order, types and names (case insensitive) 
 		/// of the three properties given.
 		/// </summary>
+		/// <param name="expression1">A LINQ expression identifying the first parameter.</param>
+		/// <param name="expression2">A LINQ expression identifying the second parameter.</param>
+		/// <param name="expression3">A LINQ expression identifying the third parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1, TArg2, TArg3>(Expression<Func<TType, TArg1>> expression1,
 			Expression<Func<TType, TArg2>> expression2,
 			Expression<Func<TType, TArg3>> expression3,
@@ -282,6 +308,10 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes three parameters that match the order, types and names (case insensitive) 
 		/// of the three properties given.
 		/// </summary>
+		/// <param name="property1">An <see cref="XProperty{TType, TProperty}"/> to use as the first parameter.</param>
+		/// <param name="property2">An <see cref="XProperty{TType, TProperty}"/> to use as the second parameter.</param>
+		/// <param name="property3">An <see cref="XProperty{TType, TProperty}"/> to use as the third parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1, TArg2, TArg3>(XProperty<TType, TArg1> property1,
 			XProperty<TType, TArg2> property2,
 			XProperty<TType, TArg3> property3,
@@ -289,13 +319,13 @@ namespace XMachine.Components.Properties
 		{
 			XName arg1 = property1?.Name, arg2 = property2?.Name, arg3 = property3?.Name;
 			if (arg1 == null ||
-				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing) ||
 				arg2 == null ||
-				!Properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
+				!properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
 				property2 != XPropertyBox<TType>.Unbox<TArg2>(arg2Existing) ||
 				arg3 == null ||
-				!Properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
+				!properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
 				property3 != XPropertyBox<TType>.Unbox<TArg3>(arg3Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -332,8 +362,8 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			ConstructWithNames = new XName[] { property1, property2, property3 };
-			ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2], (TArg3)args[property3]);
+			constructWithNames = new XName[] { property1, property2, property3 };
+			constructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2], (TArg3)args[property3]);
 		}
 
 		/// <summary>
@@ -341,6 +371,11 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes four parameters that match the order, types and names (case insensitive) 
 		/// of the four properties given.
 		/// </summary>
+		/// <param name="expression1">A LINQ expression identifying the first parameter.</param>
+		/// <param name="expression2">A LINQ expression identifying the second parameter.</param>
+		/// <param name="expression3">A LINQ expression identifying the third parameter.</param>
+		/// <param name="expression4">A LINQ expression identifying the fourth parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1, TArg2, TArg3, TArg4>(Expression<Func<TType, TArg1>> expression1,
 			Expression<Func<TType, TArg2>> expression2,
 			Expression<Func<TType, TArg3>> expression3,
@@ -365,6 +400,11 @@ namespace XMachine.Components.Properties
 		/// constructor or a constructor that takes four parameters that match the order, types and names (case insensitive) 
 		/// of the four properties given.
 		/// </summary>
+		/// <param name="property1">An <see cref="XProperty{TType, TProperty}"/> to use as the first parameter.</param>
+		/// <param name="property2">An <see cref="XProperty{TType, TProperty}"/> to use as the second parameter.</param>
+		/// <param name="property3">An <see cref="XProperty{TType, TProperty}"/> to use as the third parameter.</param>
+		/// <param name="property4">An <see cref="XProperty{TType, TProperty}"/> to use as the fourth parameter.</param>
+		/// <param name="constructor">An optional delegate to use as a constructor.</param>
 		public void ConstructWith<TArg1, TArg2, TArg3, TArg4>(XProperty<TType, TArg1> property1,
 			XProperty<TType, TArg2> property2,
 			XProperty<TType, TArg3> property3,
@@ -373,16 +413,16 @@ namespace XMachine.Components.Properties
 		{
 			XName arg1 = property1?.Name, arg2 = property2?.Name, arg3 = property3?.Name, arg4 = property4?.Name;
 			if (arg1 == null ||
-				!Properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
+				!properties.TryGetValue(arg1, out XPropertyBox<TType> arg1Existing) ||
 				property1 != XPropertyBox<TType>.Unbox<TArg1>(arg1Existing) ||
 				arg2 == null ||
-				!Properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
+				!properties.TryGetValue(arg2, out XPropertyBox<TType> arg2Existing) ||
 				property2 != XPropertyBox<TType>.Unbox<TArg2>(arg2Existing) ||
 				arg3 == null ||
-				!Properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
+				!properties.TryGetValue(arg3, out XPropertyBox<TType> arg3Existing) ||
 				property3 != XPropertyBox<TType>.Unbox<TArg3>(arg3Existing) ||
 				arg4 == null ||
-				!Properties.TryGetValue(arg4, out XPropertyBox<TType> arg4Existing) ||
+				!properties.TryGetValue(arg4, out XPropertyBox<TType> arg4Existing) ||
 				property4 != XPropertyBox<TType>.Unbox<TArg4>(arg4Existing))
 			{
 				throw new ArgumentException($"The given property is not defined on {nameof(XType<TType>)}.");
@@ -421,58 +461,203 @@ namespace XMachine.Components.Properties
 				}
 			}
 
-			ConstructWithNames = new XName[] { property1, property2, property3, property4 };
-			ConstructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2],
+			constructWithNames = new XName[] { property1, property2, property3, property4 };
+			constructorMethod = (args) => constructor((TArg1)args[property1], (TArg2)args[property2],
 				(TArg3)args[property3], (TArg4)args[property4]);
 		}
 
-		/// <summary>
-		/// Reads XML elements and attributes as properties and assign thems to the constructed object.
-		/// </summary>
-		protected override void OnBuild(XType<TType> xType, IXReadOperation reader, XElement element, ObjectBuilder<TType> objectBuilder)
+		protected override void OnInitialized()
 		{
-			IDictionary<XName, object> propertyValues = new Dictionary<XName, object>();
+			base.OnInitialized();
 
-			foreach (XPropertyBox<TType> textProperty in Properties.Values
-				.Where(x => x.WriteAs == PropertyWriteMode.Text))
+			if (XType.Components<XTexter<TType>>().Any(x => x.Enabled) ||
+				XType.Components<XBuilderComponent<TType>>().Any(x => x.Enabled))
 			{
-				propertyValues.Add(textProperty.Name, placeHolder);
-				reader.Read(element, textProperty.PropertyType, x =>
-				{
-					propertyValues[textProperty.Name] = x;
-					return true;
-				},
-				ReaderHints.IgnoreElementName);
+				Enabled = false;
 			}
 
-			foreach (XAttribute attribute in element.Attributes())
+			if (candidateProperties?.Any() != true)
 			{
-				if (Properties.TryGetValue(attribute.Name, out XPropertyBox<TType> property) &&
-					!propertyValues.ContainsKey(property.Name))
-				{
-					propertyValues.Add(property.Name, placeHolder);
+				candidateProperties = null;
+				return;
+			}
 
-					reader.Read(attribute, property.PropertyType, x =>
+			// If no parameterless constructor registered, scan for parameterized constructors
+
+			if (XType.Component<XConstructor<TType>>() == null)
+			{
+				Type type = typeof(TType);
+
+				XAutoConstructors autoConstructors = XComponents.Component<XAutoConstructors>();
+				MethodAccess ctorAccess = autoConstructors.GetAccessLevel<TType>();
+
+				if (autoConstructors.ConstructorEligible(XType))
+				{
+					foreach (ConstructorInfo ci in type
+						.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+						.Where(x => x.IsPublic ||
+							(x.IsFamilyOrAssembly && ctorAccess.HasFlag(MethodAccess.ProtectedInternal)) ||
+							(x.IsAssembly && ctorAccess.HasFlag(MethodAccess.Internal)) ||
+							(x.IsFamily && ctorAccess.HasFlag(MethodAccess.Protected)) ||
+							(x.IsFamilyAndAssembly && ctorAccess.HasFlag(MethodAccess.PrivateProtected)) ||
+							(x.IsPrivate && ctorAccess.HasFlag(MethodAccess.Private))))
 					{
-						propertyValues[property.Name] = x;
-						return true;
-					});
+						ParameterInfo[] parameters = ci.GetParameters();
+
+						PropertyInfo[] matches = new PropertyInfo[parameters.Length];
+						bool success = true;
+
+						// See if we can match all parameters by name and type
+
+						for (int i = 0; i < parameters.Length; i++)
+						{
+							PropertyInfo match = candidateProperties.FirstOrDefault(x =>
+								string.Compare(
+									parameters[i].Name,
+									x.GetXmlNameFromAttributes() ?? x.Name,
+									StringComparison.InvariantCultureIgnoreCase) == 0 &&
+								parameters[i].ParameterType.IsAssignableFrom(x.PropertyType));
+
+							if (match != null)
+							{
+								matches[i] = match;
+							}
+							else
+							{
+								success = false;
+								break;
+							}
+						}
+
+						// Create the constructor delegate if we matched everything
+
+						if (success)
+						{
+							constructWithNames = new XName[matches.Length];
+
+							for (int i = 0; i < matches.Length; i++)
+							{
+								XPropertyBox<TType> box = AddAutoProperty(matches[i]);
+								constructWithNames[i] = box.Name;
+								properties.Add(box.Name, box);
+								_ = candidateProperties.Remove(matches[i]);
+							}
+
+							constructorMethod = (props) =>
+								(TType)ci.Invoke(constructWithNames.Select(x => props[x]).ToArray());
+						}
+					}
 				}
 			}
 
-			foreach (XElement subElement in element.Elements())
-			{
-				if (Properties.TryGetValue(subElement.Name, out XPropertyBox<TType> property) &&
-					!propertyValues.ContainsKey(property.Name))
-				{
-					propertyValues.Add(property.Name, placeHolder);
+			// Test remaining properties for set accessors, add them if possible
 
-					reader.Read(subElement, property.PropertyType, x =>
+			MemberAccess propertyAccess = XComponents.Component<XAutoProperties>().GetPropertyAccess<TType>();
+
+			foreach (PropertyInfo pi in candidateProperties)
+			{
+				if (pi.SetMethod != null &&
+					(pi.SetMethod.IsPublic ||
+					(pi.SetMethod.IsFamilyOrAssembly && propertyAccess.HasFlag(MemberAccess.ProtectedInternalSet)) ||
+					(pi.SetMethod.IsAssembly && propertyAccess.HasFlag(MemberAccess.InternalSet)) ||
+					(pi.SetMethod.IsFamily && propertyAccess.HasFlag(MemberAccess.ProtectedSet)) ||
+					(pi.SetMethod.IsFamilyAndAssembly && propertyAccess.HasFlag(MemberAccess.PrivateProtectedSet)) ||
+					(pi.SetMethod.IsPrivate && propertyAccess.HasFlag(MemberAccess.PrivateSet))))
+				{
+					XPropertyBox<TType> box = AddAutoProperty(pi);
+					properties.Add(box.Name, box);
+				}
+			}
+
+			candidateProperties = null;
+		}
+
+		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<TType> objectBuilder, 
+			XObjectArgs args)
+		{
+			// Check if we should construct from our owner
+
+			if (!objectBuilder.IsConstructed && 
+				args is XPropertyArgs xpArgs && 
+				xpArgs.Hints.HasFlag(ObjectHints.ConstructedByOwner))
+			{
+				reader.AddTask(this, () =>
+				{
+					if (xpArgs.GetFromOwner(out object obj))
 					{
-						propertyValues[property.Name] = x;
+						objectBuilder.Object = (TType)obj;
+						return true;
+					}
+					return false;
+				});
+			}
+
+			// Start reading properties
+
+			IDictionary<XName, object> propertyValues = new Dictionary<XName, object>();
+
+			XObjectArgs preparePropertyForReading(XPropertyBox<TType> prop)
+			{
+				propertyValues.Add(prop.Name, XmlTools.PlaceholderObject);
+
+				if (prop.WithArgs != null)
+				{
+					if (prop.WithArgs.Hints.HasFlag(ObjectHints.ConstructedByOwner))
+					{
+						return new XPropertyArgs(prop.WithArgs, () =>
+							objectBuilder.IsConstructed
+								? new Tuple<object, bool>(prop.Get(objectBuilder.Object), true)
+								: new Tuple<object, bool>(null, false));
+					}
+
+					return prop.WithArgs;
+				}
+
+				return XObjectArgs.DefaultIgnoreElementName;
+			}
+
+			// Read properties from inner text
+
+			foreach (XPropertyBox<TType> textProperty in properties.Values
+				.Where(x => x.WriteAs == PropertyWriteMode.Text))
+			{
+				reader.Read(element, textProperty.PropertyType, x =>
+					{
+						propertyValues[textProperty.Name] = x;
 						return true;
 					},
-					ReaderHints.IgnoreElementName);
+					preparePropertyForReading(textProperty));
+			}
+
+			// Read properties from attributes
+
+			foreach (XAttribute attribute in element.Attributes())
+			{
+				if (properties.TryGetValue(attribute.Name, out XPropertyBox<TType> property) &&
+					!propertyValues.ContainsKey(property.Name))
+				{
+					reader.Read(attribute, property.PropertyType, x =>
+						{
+							propertyValues[property.Name] = x;
+							return true;
+						},
+						preparePropertyForReading(property));
+				}
+			}
+
+			// Read properties from elements
+
+			foreach (XElement subElement in element.Elements())
+			{
+				if (properties.TryGetValue(subElement.Name, out XPropertyBox<TType> property) &&
+					!propertyValues.ContainsKey(property.Name))
+				{
+					reader.Read(subElement, property.PropertyType, x =>
+						{
+							propertyValues[property.Name] = x;
+							return true;
+						},
+						preparePropertyForReading(property));
 				}
 			}
 
@@ -481,13 +666,15 @@ namespace XMachine.Components.Properties
 				return;
 			}
 
-			// With parameterized constructor
+			// Use a parameterized constructor
 
-			if (ConstructWithNames != null)
+			if (!objectBuilder.IsConstructed && 
+				(args == null || !args.Hints.HasFlag(ObjectHints.DontConstruct)) && 
+				constructWithNames != null)
 			{
 				// Use default values if constructor parameters weren't found in XML
 
-				foreach (XName cwName in ConstructWithNames)
+				foreach (XName cwName in constructWithNames)
 				{
 					if (!propertyValues.ContainsKey(cwName))
 					{
@@ -499,15 +686,15 @@ namespace XMachine.Components.Properties
 
 				reader.AddTask(this, () =>
 				{
-					if (ConstructWithNames.All(x => !ReferenceEquals(propertyValues[x], placeHolder)))
+					if (constructWithNames.All(x => !ReferenceEquals(propertyValues[x], XmlTools.PlaceholderObject)))
 					{
 						try
 						{
-							objectBuilder.Object = ConstructorMethod(propertyValues);
+							objectBuilder.Object = constructorMethod(propertyValues);
 						}
 						finally
 						{
-							foreach (XName cw in ConstructWithNames)
+							foreach (XName cw in constructWithNames)
 							{
 								_ = propertyValues.Remove(cw);
 							}
@@ -527,17 +714,16 @@ namespace XMachine.Components.Properties
 				{
 					if (propertyValues.Count > 0)
 					{
-						XName[] keysToSet = new XName[propertyValues.Count];
-						propertyValues.Keys.CopyTo(keysToSet, 0);
+						XName[] keysToSet = propertyValues.Keys.ToArray();
 
 						foreach (XName ppty in keysToSet)
 						{
 							object value = propertyValues[ppty];
-							if (!ReferenceEquals(value, placeHolder))
+							if (!ReferenceEquals(value, XmlTools.PlaceholderObject))
 							{
 								try
 								{
-									Properties[ppty].Set(objectBuilder.Object, value);
+									properties[ppty].Set(objectBuilder.Object, value);
 								}
 								finally
 								{
@@ -557,17 +743,9 @@ namespace XMachine.Components.Properties
 			});
 		}
 
-		/// <summary>
-		/// Retrieves properties from the object and writes them as XML.
-		/// </summary>
-		protected override bool OnWrite(XType<TType> xType, IXWriteOperation writer, TType obj, XElement element)
+		protected override bool OnWrite(IXWriteOperation writer, TType obj, XElement element, XObjectArgs args)
 		{
-			if (WriteIf?.Invoke(obj) == false)
-			{
-				return false;
-			}
-
-			foreach (XPropertyBox<TType> property in Properties.Values)
+			foreach (XPropertyBox<TType> property in properties.Values)
 			{
 				if (property.WriteIf?.Invoke(obj) == false)
 				{
@@ -578,7 +756,7 @@ namespace XMachine.Components.Properties
 
 				if (property.WriteAs == PropertyWriteMode.Attribute)
 				{
-					XAttribute propertyAttribute = writer.WriteAttribute(value, property.Name);
+					XAttribute propertyAttribute = writer.WriteAttribute(value, property.Name, property.WithArgs);
 					if (propertyAttribute != null)
 					{
 						element.Add(propertyAttribute);
@@ -586,15 +764,21 @@ namespace XMachine.Components.Properties
 				}
 				else if (property.WriteAs == PropertyWriteMode.Text)
 				{
-					_ = writer.WriteTo(element, value, property.PropertyType);
+					_ = writer.WriteTo(element, value, property.PropertyType, property.WithArgs);
 				}
 				else
 				{
-					element.Add(writer.WriteTo(new XElement(property.Name), value, property.PropertyType));
+					element.Add(writer.WriteTo(new XElement(property.Name), value, property.PropertyType, property.WithArgs));
 				}
 			}
 
 			return false;
 		}
+
+		private XPropertyBox<TType> AddAutoProperty(PropertyInfo pi) =>
+			(XPropertyBox<TType>)addPropertyMethod.MakeGenericMethod(pi.PropertyType).Invoke(this, new object[] { pi });
+
+		private XPropertyBox<TType> AddAutoProperty<TProperty>(PropertyInfo pi) =>
+			XPropertyBox<TType>.Box(new XAutoProperty<TType, TProperty>(pi));
 	}
 }

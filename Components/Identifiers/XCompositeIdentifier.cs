@@ -6,7 +6,7 @@ namespace XMachine.Components.Identifiers
 {
 	/// <summary>
 	/// Combines multiple <see cref="XIdentifier{TType, TId}"/> objects into a single object that can
-	/// assign IDs and perform equality comparisons for all of them.
+	/// assign IDs and perform equality comparisons.
 	/// </summary>
 	public sealed class XCompositeIdentifier : XIdentifier<object, object>
 	{
@@ -66,9 +66,10 @@ namespace XMachine.Components.Identifiers
 		public XCompositeIdentifier() => KeyComparer = new CompositeEqualityComparer(identifiers);
 
 		/// <summary>
-		/// Create a new <see cref="XCompositeIdentifier"/> that copies the contents of the given 
-		/// <see cref="XCompositeIdentifier"/>.
+		/// Create a new <see cref="XCompositeIdentifier"/> that copies the contents of <paramref name="other"/>.
 		/// </summary>
+		/// <param name="other">Another <see cref="XCompositeIdentifier"/> whose identifiers will be copied
+		/// into the new instance.</param>
 		public XCompositeIdentifier(XCompositeIdentifier other) : this()
 		{
 			if (other == null)
@@ -82,21 +83,22 @@ namespace XMachine.Components.Identifiers
 		}
 
 		/// <summary>
-		/// Return the number of <see cref="XIdentifier{TType, TId}"/> objects contained in this one.
+		/// Get the number of <see cref="XIdentifier{TType, TId}"/> objects contained.
 		/// </summary>
 		public int Count => identifiers.Count;
 
 		/// <summary>
-		/// Returns the ID produced by the first <see cref="XIdentifier{TType, TId}"/> with a matching object
-		/// type.
+		/// Get the ID produced by the <see cref="XIdentifier{TType, TId}"/> that has the closest-matching
+		/// object type.
 		/// </summary>
+		/// <param name="obj">The <see cref="object"/> to create an ID for.</param>
+		/// <returns>An <see cref="object"/> that acts as ID, or <c>null</c>.</returns>
 		public override object GetId(object obj)
 		{
 			if (obj == null)
 			{
 				return null;
 			}
-
 			Type type = obj.GetType();
 
 			if (XDefaultTypes.IsDefaultType(type))
@@ -119,9 +121,11 @@ namespace XMachine.Components.Identifiers
 		}
 
 		/// <summary>
-		/// Check whether any <see cref="XIdentifier{TType, TId}"/> in this <see cref="XCompositeIdentifier"/> is
+		/// Get whether any <see cref="XIdentifier{TType, TId}"/> in this <see cref="XCompositeIdentifier"/> is
 		/// able to assign an ID to objects of the given <see cref="Type"/>.
 		/// </summary>
+		/// <param name="type">A <see cref="Type"/> to be checked as ID-able.</param>
+		/// <returns>True if IDs can be generated for objects of the given type.</returns>
 		public override bool CanId(Type type)
 		{
 			if (type == null)
@@ -141,10 +145,12 @@ namespace XMachine.Components.Identifiers
 		}
 
 		/// <summary>
-		/// Check whether any <see cref="XIdentifier{TType, TId}"/> in this <see cref="XCompositeIdentifier"/> is
-		/// able to assign an ID to objects of the given <see cref="Type"/>. If <c>true</c>, the out parameter
-		/// contains the <see cref="Type"/> of the ID.
+		/// Get whether any <see cref="XIdentifier{TType, TId}"/> in this <see cref="XCompositeIdentifier"/> is
+		/// able to assign an ID to objects of the given <see cref="Type"/>.
 		/// </summary>
+		/// <param name="type">A <see cref="Type"/> to be checked as ID-able.</param>
+		/// <param name="idType">The <see cref="Type"/> of the ID that will be generated.</param>
+		/// <returns>True if IDs can be generated for objects of the given type.</returns>
 		public bool CanId(Type type, out Type idType)
 		{
 			if (type == null)
@@ -176,14 +182,17 @@ namespace XMachine.Components.Identifiers
 		/// <summary>
 		/// Add a new <see cref="XIdentifier{TType, TId}"/> to this <see cref="XCompositeIdentifier"/>.
 		/// </summary>
+		/// <param name="identifier">The <see cref="XIdentifier{TType, TId}"/> to add.</param>
 		public void Identify<TType, TId>(XIdentifier<TType, TId> identifier) where TType : class =>
 			identifiers.Add(XIdentifierBox.Box(identifier ?? throw new ArgumentNullException(nameof(identifier))));
 
 		/// <summary>
 		/// Add a new <see cref="XIdentifier{TType, TId}"/> to this <see cref="XCompositeIdentifier"/>.
 		/// </summary>
+		/// <param name="identifier">A delegate defining the <see cref="XIdentifier{TType, TId}"/> to add.</param>
 		public void Identify<TType, TId>(Func<TType, TId> identifier) where TType : class =>
-			identifiers.Add(XIdentifierBox.Box(XIdentifier<TType, TId>.Create(identifier ?? throw new ArgumentNullException(nameof(identifier)))));
+			identifiers.Add(XIdentifierBox.Box(XIdentifier<TType, TId>.Create(identifier ??
+				throw new ArgumentNullException(nameof(identifier)))));
 
 		/// <summary>
 		/// Remove any <see cref="XIdentifier{TType, TId}"/> from this <see cref="XCompositeIdentifier"/> if its

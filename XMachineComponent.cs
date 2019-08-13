@@ -14,68 +14,64 @@ namespace XMachine
 		private Action<Exception> exceptionHandler;
 
 		/// <summary>
-		/// Whether the component is enabled.
+		/// Create a new instance of <see cref="XMachineComponent"/>.
+		/// </summary>
+		protected XMachineComponent() { }
+
+		/// <summary>
+		/// Get or set whether the component is enabled and should be invoked by its owner.
 		/// </summary>
 		public bool Enabled { get; set; } = true;
 
 		/// <summary>
-		/// A delegate that handles exceptions thrown by this <see cref="XMachineComponent"/>. By default, it will use
+		/// Get or set the delegate that handles <see cref="Exception"/>s. By default, it will use
 		/// <see cref="XComponents.ExceptionHandler"/>.
 		/// </summary>
-		public Action<Exception> ExceptionHandler
+		public virtual Action<Exception> ExceptionHandler
 		{
 			get => exceptionHandler ?? XComponents.ExceptionHandler;
 			set => exceptionHandler = value;
 		}
 
 		/// <summary>
-		/// Called when <see cref="XMachine"/> is initialized and scans <see cref="Type"/> objects from assemblies
-		/// tagged with <see cref="XMachineAssemblyAttribute"/>.
+		/// Called when <see cref="XComponents"/> detects that a new assembly has been loaded, and the assembly is
+		/// tagged with <see cref="XMachineAssemblyAttribute"/>. All public <see cref="Type"/> objects defined in
+		/// the assembly will be passed to this method excluding arrays, constructed generics, COM objects, and 
+		/// imported types.
 		/// </summary>
-		protected virtual void OnInspectType(Type type)
-		{
-
-		}
+		/// <param name="type">The <see cref="Type"/> object to inspect.</param>
+		protected virtual void OnInspectType(Type type) { }
 
 		/// <summary>
 		/// Called when a new instance of <see cref="XDomain"/> is created.
 		/// </summary>
-		protected virtual void OnCreateDomain(XDomain domain)
-		{
-
-		}
+		/// <param name="domain">The new instance of <see cref="XDomain"/>.</param>
+		protected virtual void OnCreateDomain(XDomain domain) { }
 
 		/// <summary>
 		/// Called when a new instance of <see cref="XType{TType}"/> is created.
 		/// </summary>
-		protected virtual void OnCreateXType<T>(XType<T> xType)
-		{
-
-		}
+		/// <param name="xType">The new instance of <see cref="XType{T}"/>.</param>
+		protected virtual void OnCreateXType<T>(XType<T> xType) { }
 
 		/// <summary>
-		/// Called when a new instance of <see cref="XType{TType}"/> is created, after <see cref="OnCreateXType{T}(XType{T})"/>.
+		/// Called when a new instance of <see cref="XType{TType}"/> is created, after <see cref="OnCreateXType{T}(XType{T})"/>
+		/// and after <see cref="XTypeComponent{T}.Initialize"/>.
 		/// </summary>
-		protected virtual void OnCreateXTypeLate<T>(XType<T> xType)
-		{
-
-		}
+		/// <param name="xType">The new instance of <see cref="XType{T}"/>.</param>
+		protected virtual void OnCreateXTypeLate<T>(XType<T> xType) { }
 
 		/// <summary>
 		/// Called when a new <see cref="XReader"/> is created.
 		/// </summary>
-		protected virtual void OnCreateReader(XReader reader)
-		{
-
-		}
+		/// <param name="reader">The new instance of <see cref="XReader"/>.</param>
+		protected virtual void OnCreateReader(XReader reader) { }
 
 		/// <summary>
 		/// Called when a new <see cref="XWriter"/> is created.
 		/// </summary>
-		protected virtual void OnCreateWriter(XWriter writer)
-		{
-
-		}
+		/// <param name="writer">The new instance of <see cref="XWriter"/>.</param>
+		protected virtual void OnCreateWriter(XWriter writer) { }
 
 		internal void InspectType(Type type) => OnInspectType(type);
 

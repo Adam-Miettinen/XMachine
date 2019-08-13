@@ -5,8 +5,9 @@ namespace XMachine.Components.Collections
 	internal sealed class XICollection<TCollection, TItem> : XCollection<TCollection, TItem>
 		where TCollection : ICollection<TItem>
 	{
-		internal XICollection() { }
+		internal XICollection(XType<TCollection> xType) : base(xType) { }
 
-		protected override void AddItem(TCollection collection, TItem item) => collection.Add(item);
+		protected override void AddItem(TCollection collection, int index, TItem item) =>
+			collection.Add(item);
 	}
 }

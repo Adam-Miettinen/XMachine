@@ -10,6 +10,7 @@ namespace XMachine.Components.Properties
 			{
 				writeIf = () => property.WriteIf,
 				writeAs = () => property.WriteAs,
+				withArgs = () => property.WithArgs,
 				propertyType = property.PropertyType,
 				getter = (obj) => property.Get(obj),
 				setter = (obj, value) => property.Set(obj, (TProperty)value)
@@ -26,6 +27,7 @@ namespace XMachine.Components.Properties
 
 		private Func<Predicate<TType>> writeIf;
 		private Func<PropertyWriteMode> writeAs;
+		private Func<XObjectArgs> withArgs;
 
 		private XPropertyBox(object property, XName name) : base(name) => innerProperty = property;
 
@@ -34,6 +36,8 @@ namespace XMachine.Components.Properties
 		public override PropertyWriteMode WriteAs => writeAs();
 
 		public override Predicate<TType> WriteIf => writeIf();
+
+		public override XObjectArgs WithArgs => withArgs();
 
 		public override object Get(TType obj) => getter(obj);
 

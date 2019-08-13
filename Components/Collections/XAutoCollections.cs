@@ -11,8 +11,9 @@ using XMachine.Reflection;
 namespace XMachine.Components.Collections
 {
 	/// <summary>
-	/// The <see cref="XAutoCollections"/> component automatically assigns <see cref="XTypeComponent{TType}"/>s
-	/// to all supported collection types.
+	/// An <see cref="XMachineComponent"/> that adds <see cref="XTypeComponent{T}"/>s to control the reading and
+	/// writing of collection items from collection-like objects that have known behaviour for enumerating
+	/// and adding items.
 	/// </summary>
 	public sealed class XAutoCollections : XMachineComponent
 	{
@@ -22,8 +23,10 @@ namespace XMachine.Components.Collections
 
 		private XName itemName, keyName, valueName, arrayLowerBoundName;
 
+		internal XAutoCollections() { }
+
 		/// <summary>
-		/// The default <see cref="XName"/> used for collection elements.
+		/// Get or set the default <see cref="XName"/> used for collection elements.
 		/// </summary>
 		public XName ItemName
 		{
@@ -32,7 +35,7 @@ namespace XMachine.Components.Collections
 		}
 
 		/// <summary>
-		/// The <see cref="XName"/> used for the key of a dictionary entry (<see cref="KeyValuePair{TKey, TValue}"/>
+		/// Get or set the <see cref="XName"/> used for the key of a dictionary entry (<see cref="KeyValuePair{TKey, TValue}"/>
 		/// or <see cref="DictionaryEntry"/>).
 		/// </summary>
 		public XName KeyName
@@ -42,7 +45,7 @@ namespace XMachine.Components.Collections
 		}
 
 		/// <summary>
-		/// The <see cref="XName"/> used for the value of a dictionary entry (<see cref="KeyValuePair{TKey, TValue}"/>
+		/// Get or set the <see cref="XName"/> used for the value of a dictionary entry (<see cref="KeyValuePair{TKey, TValue}"/>
 		/// or <see cref="DictionaryEntry"/>).
 		/// </summary>
 		public XName ValueName
@@ -52,7 +55,7 @@ namespace XMachine.Components.Collections
 		}
 
 		/// <summary>
-		/// The <see cref="XName"/> used for the attribute denoting an array's non-zero lower bound.
+		/// Get or set the <see cref="XName"/> used for an attribute denoting an array's non-zero lower bound.
 		/// </summary>
 		public XName ArrayLowerBoundName
 		{
@@ -60,9 +63,6 @@ namespace XMachine.Components.Collections
 			set => arrayLowerBoundName = value ?? throw new ArgumentNullException(nameof(value));
 		}
 
-		/// <summary>
-		/// Adds an <see cref="XCollection{TCollection, TItem}"/> component to an eligible <see cref="XType{TType}"/>.
-		/// </summary>
 		protected override void OnCreateXType<T>(XType<T> xType)
 		{
 			Type type = typeof(T);
@@ -80,6 +80,7 @@ namespace XMachine.Components.Collections
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
+						xType,
 						typeof(XKeyValuePair<,>)
 							.MakeGenericType(typeArgs)
 							.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
@@ -90,7 +91,7 @@ namespace XMachine.Components.Collections
 			}
 			if (xType is XType<DictionaryEntry> xTypeDictEntry)
 			{
-				xTypeDictEntry.Register(new XBuilderComponent<DictionaryEntry>(new XDictionaryEntry()));
+				xTypeDictEntry.Register(new XBuilderComponent<DictionaryEntry>(xTypeDictEntry, new XDictionaryEntry()));
 				return;
 			}
 
@@ -102,7 +103,10 @@ namespace XMachine.Components.Collections
 					.MakeGenericType(typeArgs)
 					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault()
-					.Invoke(null));
+					.Invoke(new object[]
+					{
+						xType
+					}));
 				return;
 			}
 
@@ -114,7 +118,10 @@ namespace XMachine.Components.Collections
 					.MakeGenericType(typeArgs)
 					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault()
-					.Invoke(null));
+					.Invoke(new object[]
+					{
+						xType
+					}));
 				return;
 			}
 
@@ -126,7 +133,10 @@ namespace XMachine.Components.Collections
 					.MakeGenericType(typeArgs)
 					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault()
-					.Invoke(null));
+					.Invoke(new object[]
+					{
+						xType
+					}));
 				return;
 			}
 
@@ -152,7 +162,10 @@ namespace XMachine.Components.Collections
 						.MakeGenericType(type.GetElementType())
 						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 						.FirstOrDefault()
-						.Invoke(null));
+						.Invoke(new object[]
+						{
+							xType
+						}));
 				}
 
 				return;
@@ -172,7 +185,10 @@ namespace XMachine.Components.Collections
 						.MakeGenericType(type, dictArgs[0], dictArgs[1])
 						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 						.FirstOrDefault()
-						.Invoke(null));
+						.Invoke(new object[]
+						{
+							xType
+						}));
 					return;
 				}
 			}
@@ -185,7 +201,10 @@ namespace XMachine.Components.Collections
 					.MakeGenericType(type)
 					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault()
-					.Invoke(null));
+					.Invoke(new object[]
+					{
+						xType
+					}));
 				return;
 			}
 
@@ -202,7 +221,10 @@ namespace XMachine.Components.Collections
 						.MakeGenericType(type, itemType)
 						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 						.FirstOrDefault()
-						.Invoke(null));
+						.Invoke(new object[]
+						{
+							xType
+						}));
 					return;
 				}
 			}
@@ -215,13 +237,17 @@ namespace XMachine.Components.Collections
 					.MakeGenericType(type)
 					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 					.FirstOrDefault()
-					.Invoke(null));
+					.Invoke(new object[]
+					{
+						xType
+					}));
 				return;
 			}
 
-			// Queue<T>
-
+			if (type.IsClass)
 			{
+				// Queue<T>
+
 				Type queueType = type.GetSelfAndBaseTypes()
 					.FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(Queue<>));
 
@@ -231,34 +257,35 @@ namespace XMachine.Components.Collections
 						.MakeGenericType(type, queueType.GenericTypeArguments[0])
 						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
 						.FirstOrDefault()
-						.Invoke(null));
+						.Invoke(new object[]
+						{
+							xType
+						}));
 					return;
 				}
-			}
 
+				// Stack<T>
 
-			// Stack<T>
-
-			{
-				Type stackType = type.GetSelfAndBaseTypes()
-					.FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(Stack<>));
-
-				if (stackType != null)
 				{
-					xType.Register((XTypeComponent<T>)typeof(XStack<,>)
-						.MakeGenericType(type, stackType.GenericTypeArguments[0])
-						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-						.FirstOrDefault()
-						.Invoke(null));
-					return;
+					Type stackType = type.GetSelfAndBaseTypes()
+						.FirstOrDefault(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(Stack<>));
+
+					if (stackType != null)
+					{
+						xType.Register((XTypeComponent<T>)typeof(XStack<,>)
+							.MakeGenericType(type, stackType.GenericTypeArguments[0])
+							.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+							.FirstOrDefault()
+							.Invoke(new object[]
+							{
+							xType
+							}));
+						return;
+					}
 				}
 			}
 		}
 
-		/// <summary>
-		/// Apply additional customizatoin, and disable <see cref="XCollection{TCollection, TItem}"/> components 
-		/// for types that have an <see cref="XTexter{T}"/> or <see cref="XBuilderComponent{T}"/>.
-		/// </summary>
 		protected override void OnCreateXTypeLate<T>(XType<T> xType)
 		{
 			if (xType.Components<XTexter<T>>().Any(x => x.Enabled) ||

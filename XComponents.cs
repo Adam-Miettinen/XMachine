@@ -12,8 +12,7 @@ using XMachine.Components.Rules;
 namespace XMachine
 {
 	/// <summary>
-	/// <see cref="XComponents"/> manages loaded <see cref="XMachineComponent"/>s and provides convenient extension methods to
-	/// customize their behaviour.
+	/// The static <see cref="XComponents"/> class manages loaded <see cref="XMachineComponent"/>s.
 	/// </summary>
 	public static class XComponents
 	{
@@ -43,21 +42,21 @@ namespace XMachine
 			internal void CreateWriter(XWriter writer) => ForEachComponent((comp) => comp.CreateWriter(writer));
 		}
 
-		internal static readonly Action<Exception> ThrowHandler = (e) => throw e;
-
 		private static readonly Queue<Exception> startupErrors;
-
-		private static readonly IList<WeakReference<XDomain>> domains;
 
 		private static readonly XMachineComponents componentManager;
 		private static readonly object staticLocker = new object();
 		private static bool isInitializedStatic = false;
+
+		private static readonly IList<WeakReference<XDomain>> domains;
+		private static readonly IList<Assembly> loadedAssemblies;
 
 		private static Action<Exception> exceptionHandler;
 
 		static XComponents()
 		{
 			domains = new List<WeakReference<XDomain>>();
+			loadedAssemblies = new List<Assembly>();
 
 			componentManager = new XMachineComponents();
 
@@ -82,11 +81,11 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Get or set a delegate that will handle exceptions.
+		/// Get or set the delegate that handles <see cref="Exception"/>s.
 		/// </summary>
 		public static Action<Exception> ExceptionHandler
 		{
-			get => exceptionHandler ?? ThrowHandler;
+			get => exceptionHandler ?? XmlTools.ThrowHandler;
 			set
 			{
 				exceptionHandler = value;
@@ -104,7 +103,7 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Retrieve a component of the given type.
+		/// Retrieve a component of type <typeparamref name="V"/>.
 		/// </summary>
 		public static V Component<V>() where V : XMachineComponent
 		{
@@ -115,7 +114,7 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Retrieve all components of the given type.
+		/// Retrieve all components of type <typeparamref name="V"/>.
 		/// </summary>
 		public static IEnumerable<V> Components<V>() where V : XMachineComponent
 		{
@@ -139,6 +138,7 @@ namespace XMachine
 		/// <summary>
 		/// Register a component.
 		/// </summary>
+		/// <param name="component">The component to register.</param>
 		public static void Register(XMachineComponent component)
 		{
 			lock (ComponentManager)
@@ -150,6 +150,7 @@ namespace XMachine
 		/// <summary>
 		/// Register components.
 		/// </summary>
+		/// <param name="components">The components to register.</param>
 		public static void Register(params XMachineComponent[] components)
 		{
 			lock (ComponentManager)
@@ -159,8 +160,9 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Deegister a component.
+		/// Deregister a component.
 		/// </summary>
+		/// <param name="component">The component to deregister.</param>
 		public static void Deregister(XMachineComponent component)
 		{
 			lock (ComponentManager)
@@ -170,9 +172,10 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Deegister components.
+		/// Deregister components.
 		/// </summary>
-		public static void Deegister(params XMachineComponent[] components)
+		/// <param name="components">The components to deregister.</param>
+		public static void Deregister(params XMachineComponent[] components)
 		{
 			lock (ComponentManager)
 			{
@@ -182,14 +185,27 @@ namespace XMachine
 
 		internal static void OnXDomainCreated(XDomain domain)
 		{
+			InitializeStatic();
+
 			for (int i = 0; i < domains.Count; i++)
 			{
-				if (!domains[i].TryGetTarget(out XDomain d))
+				if (!domains[i].TryGetTarget(out XDomain _))
 				{
 					domains.RemoveAt(i--);
 				}
 			}
 			domains.Add(new WeakReference<XDomain>(domain));
+
+			foreach (Assembly assembly in loadedAssemblies)
+			{
+				if (IsAssemblyNamerEligible(assembly))
+				{
+					foreach (Type type in GetAssemblyTypes(assembly))
+					{
+						domain.Namer.InspectType(type);
+					}
+				}
+			}
 
 			lock (ComponentManager)
 			{
@@ -213,31 +229,49 @@ namespace XMachine
 			}
 		}
 
-		internal static XReader GetReader(XDomain domain)
+		internal static void OnReaderCreated(XReader reader)
 		{
-			XReader reader = new XReaderImpl(domain);
-
 			lock (ComponentManager)
 			{
 				ComponentManager.CreateReader(reader);
 			}
-
-			return reader;
 		}
 
-		internal static XWriter GetWriter(XDomain domain)
+		internal static void OnWriterCreated(XWriter writer)
 		{
-			XWriter writer = new XWriterImpl(domain);
-
 			lock (ComponentManager)
 			{
 				ComponentManager.CreateWriter(writer);
 			}
-
-			return writer;
 		}
 
-		internal static void InitializeStatic()
+		internal static void ResetAllXDomains()
+		{
+			for (int i = 0; i < domains.Count; i++)
+			{
+				if (domains[i].TryGetTarget(out XDomain domain))
+				{
+					domain.Reset();
+
+					foreach (Assembly assembly in loadedAssemblies)
+					{
+						if (IsAssemblyNamerEligible(assembly))
+						{
+							foreach (Type type in GetAssemblyTypes(assembly))
+							{
+								domain.Namer.InspectType(type);
+							}
+						}
+					}
+				}
+				else
+				{
+					domains.RemoveAt(i--);
+				}
+			}
+		}
+
+		private static void InitializeStatic()
 		{
 			if (isInitializedStatic)
 			{
@@ -258,76 +292,127 @@ namespace XMachine
 				new XAutoCollections(),
 				new XDefaultTypes(),
 				new XIdentifiers(),
-				new XTypeRules()
+				new XRules()
 			);
 
-			Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-			AppDomain.CurrentDomain.AssemblyLoad += (sender, args) => ScanAssembly(args.LoadedAssembly, Components());
-
-			ExceptionHandler = ThrowHandler;
-		}
-
-		internal static void ResetStatic()
-		{
-			for (int i = 0; i < domains.Count; i++)
+			AppDomain.CurrentDomain.AssemblyLoad += (sender, args) =>
 			{
-				if (domains[i].TryGetTarget(out XDomain domain))
+				if (args.LoadedAssembly != null)
 				{
-					domain.Reset();
+					ScanAssembly(args.LoadedAssembly, Components());
 				}
-				else
-				{
-					domains.RemoveAt(i--);
-				}
+			};
+
+			foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+			{
+				ScanAssembly(assembly, Components());
 			}
 		}
 
-		internal static void ScanAssembly(Assembly assembly, IEnumerable<XMachineComponent> components)
+		private static void ScanAssembly(Assembly assembly, IEnumerable<XMachineComponent> components)
 		{
-			if (assembly == null)
+			loadedAssemblies.Add(assembly);
+
+			XMachineAssemblyAttribute attr = assembly.GetCustomAttribute<XMachineAssemblyAttribute>();
+			if (attr != null)
 			{
-				return;
+				XmlTools.SetXMachineAssemblyAttribute(assembly, attr);
 			}
 
-			// Alert XNamers
+			IEnumerator<Type> typeEnumerator = GetAssemblyTypes(assembly).GetEnumerator();
 
-			for (int i = 0; i < domains.Count; i++)
+			if (IsAssemblyNamerEligible(assembly))
 			{
-				if (domains[i].TryGetTarget(out XDomain domain))
+				// Alert namers
+
+				for (int i = 0; i < domains.Count; i++)
 				{
-					domain.Namer.ScanInternal(assembly);
-				}
-				else
-				{
-					domains.RemoveAt(i--);
+					if (domains[i].TryGetTarget(out XDomain domain))
+					{
+						while (typeEnumerator.MoveNext())
+						{
+							try
+							{
+								domain.Namer.InspectType(typeEnumerator.Current);
+							}
+							catch (Exception e)
+							{
+								ExceptionHandler(e);
+							}
+						}
+						typeEnumerator.Reset();
+					}
+					else
+					{
+						domains.RemoveAt(i--);
+					}
 				}
 			}
 
-			// Alert XMachineComponents
-
-			if (assembly.IsXIgnored() ||
-				assembly.GetCustomAttribute<XMachineAssemblyAttribute>() == null ||
-				components == null ||
-				!components.Any())
+			if (components?.Any() == true && IsAssemblyComponentEligible(assembly))
 			{
-				return;
-			}
+				// Alert components
 
-			List<Type> types = assembly.ExportedTypes.Where(
-				x => !x.IsXIgnored() &&
-				!x.IsArray && !x.IsCOMObject && !x.IsImport &&
-				(!x.IsGenericType || x.IsGenericTypeDefinition)).ToList();
-
-			IEnumerator<Type> enumerator = types.GetEnumerator();
-
-			foreach (XMachineComponent comp in components)
-			{
-				while (enumerator.MoveNext())
+				foreach (XMachineComponent comp in components)
 				{
-					comp.InspectType(enumerator.Current);
+					while (typeEnumerator.MoveNext())
+					{
+						try
+						{
+							comp.InspectType(typeEnumerator.Current);
+						}
+						catch (Exception e)
+						{
+							ExceptionHandler(e);
+						}
+					}
+					typeEnumerator.Reset();
 				}
-				enumerator.Reset();
 			}
+		}
+
+		private static bool IsAssemblyNamerEligible(Assembly assembly) =>
+			!XmlTools.ScanUnknownAssemblies ||
+				XmlTools.GetXMachineAssemblyAttribute(assembly) != null ||
+				assembly == typeof(object).Assembly;
+
+		private static bool IsAssemblyComponentEligible(Assembly assembly) =>
+			XmlTools.GetXMachineAssemblyAttribute(assembly) != null;
+
+		private static IEnumerable<Type> GetAssemblyTypes(Assembly assembly)
+		{
+			IEnumerable<Type> exportedTypes;
+
+			try
+			{
+				exportedTypes = assembly.ExportedTypes;
+			}
+			catch (Exception e)
+			{
+				ExceptionHandler(e);
+				return Enumerable.Empty<Type>();
+			}
+
+			List<Type> types = new List<Type>(256);
+
+			foreach (Type type in exportedTypes)
+			{
+				AddTypesRecursive(type);
+			}
+
+			void AddTypesRecursive(Type type)
+			{
+				if (!type.IsArray && !type.IsCOMObject && !type.IsImport && (!type.IsGenericType || type.IsGenericTypeDefinition))
+				{
+					types.Add(type);
+					foreach (Type nestedType in type.GetNestedTypes())
+					{
+						AddTypesRecursive(nestedType);
+					}
+				}
+			}
+
+			return types;
 		}
 	}
 }

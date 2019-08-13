@@ -6,8 +6,8 @@ using XMachine.Components;
 namespace XMachine
 {
 	/// <summary>
-	/// Represents an object within <see cref="XMachine"/> whose functionality is represented by
-	/// components, which are objects of type <typeparamref name="T"/>.
+	/// Represents an object within <see cref="XMachine"/> whose functionality is extensible by adding components
+	/// of type <typeparamref name="T"/>.
 	/// </summary>
 	public abstract class XWithComponents<T> : IExceptionHandler, IXWithComponents<T> where T : IXComponent
 	{
@@ -16,54 +16,57 @@ namespace XMachine
 		private Action<Exception> exceptionHandler;
 
 		/// <summary>
-		/// Create a new instance of <see cref="XWithComponents{T}"/> to manage components of the given
-		/// type.
+		/// Create a new instance of <see cref="XWithComponents{T}"/>.
 		/// </summary>
 		public XWithComponents() => Enumerator = registeredComponents.GetEnumerator();
 
-		private IEnumerator<T> Enumerator
+		/// <summary>
+		/// Get an <see cref="IEnumerator{T}"/> over the components in this <see cref="XWithComponents{T}"/>. Enumerates
+		/// both enabled and disabled components.
+		/// </summary>
+		protected IEnumerator<T> Enumerator
 		{
 			get
 			{
 				enumerator.Reset();
 				return enumerator;
 			}
-			set => enumerator = value;
+			private set => enumerator = value;
 		}
 
 		/// <summary>
-		/// The delegate that handles exceptions thrown by components.
+		/// Get or set the delegate that handles <see cref="Exception"/>s.
 		/// </summary>
-		public Action<Exception> ExceptionHandler
+		public virtual Action<Exception> ExceptionHandler
 		{
-			get => exceptionHandler ?? XComponents.ThrowHandler;
+			get => exceptionHandler ?? XmlTools.ThrowHandler;
 			set => exceptionHandler = value;
 		}
 
 		/// <summary>
-		/// Retrieve a component of the given type.
+		/// Retrieve a component of type <typeparamref name="V"/>.
 		/// </summary>
 		public V Component<V>() where V : T => registeredComponents.OfType<V>().FirstOrDefault();
 
 		/// <summary>
-		/// Retrieve all components of the given type.
+		/// Retrieve all components of type <typeparamref name="V"/>.
 		/// </summary>
 		public IEnumerable<V> Components<V>() where V : T => registeredComponents.OfType<V>();
 
 		/// <summary>
-		/// Retrieve all components.
+		/// Retrieve all components on this <see cref="XWithComponents{T}"/>.
 		/// </summary>
 		public IEnumerable<T> Components() => registeredComponents;
 
 		/// <summary>
 		/// Register a component.
 		/// </summary>
+		/// <param name="component">The component to register.</param>
 		public void Register(T component)
 		{
 			if (component == null)
 			{
-				ExceptionHandler(new ArgumentNullException("Component cannot be null"));
-				return;
+				throw new ArgumentNullException(nameof(component));
 			}
 			if (!registeredComponents.Contains(component))
 			{
@@ -74,6 +77,7 @@ namespace XMachine
 		/// <summary>
 		/// Register components.
 		/// </summary>
+		/// <param name="components">The components to register.</param>
 		public void Register(params T[] components)
 		{
 			if (components != null && components.Length > 0)
@@ -84,7 +88,7 @@ namespace XMachine
 				{
 					if (component == null)
 					{
-						ExceptionHandler(new ArgumentNullException("Component cannot be null"));
+						throw new ArgumentNullException("Component cannot be null");
 					}
 					else if (!registeredComponents.Contains(component))
 					{
@@ -98,11 +102,13 @@ namespace XMachine
 		/// <summary>
 		/// Deregister a component.
 		/// </summary>
+		/// <param name="component">The component to deregister.</param>
 		public void Deregister(T component) => registeredComponents.Remove(component);
 
 		/// <summary>
 		/// Deregister components.
 		/// </summary>
+		/// <param name="components">The components to deregister.</param>
 		public void Deregister(params T[] components)
 		{
 			if (components != null && components.Length > 0)
@@ -115,11 +121,17 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Perform a delegate on each enabled component. Any exceptions thrown by delegates will be caught and handled 
-		/// by <see cref="ExceptionHandler"/>.
+		/// Perform a delegate on each enabled component, catching exceptions and handling them with 
+		/// <see cref="ExceptionHandler"/>.
 		/// </summary>
+		/// <param name="action">The delegate to be performed.</param>
 		protected void ForEachComponent(Action<T> action)
 		{
+			if (action == null)
+			{
+				throw new ArgumentNullException(nameof(action));
+			}
+
 			IEnumerator<T> enumerator = Enumerator;
 
 			while (enumerator.MoveNext())
@@ -140,10 +152,12 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Perform a delegate on each enabled component and return a lazy enumeration of the return values. 
-		/// Any exceptions thrown by delegates will be caught and handled by <see cref="ExceptionHandler"/>;
-		/// their return values will be excluded from the enumeration.
+		/// Perform a delegate on each enabled component, catching exceptions and handling them with 
+		/// <see cref="ExceptionHandler"/>.
 		/// </summary>
+		/// <param name="func">The delegate to be performed.</param>
+		/// <returns>An <see cref="IEnumerable{TReturn}"/> over the values returned by enabled components
+		/// that did not throw exceptions.</returns>
 		protected IEnumerable<TReturn> ForEachComponent<TReturn>(Func<T, TReturn> func)
 		{
 			IEnumerator<T> enumerator = Enumerator;
@@ -168,11 +182,15 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Perform a delegate on each enabled component, stopping when the given predicate over the 
-		/// delegate's return values evaluates to true. The return value is the return value at which
-		/// this method stopped or, if the predicate was never true, a default value. Any exceptions thrown 
-		/// by delegates will be caught and handled by <see cref="ExceptionHandler"/>.
+		/// Perform a delegate on each enabled component, catching exceptions and handling them with 
+		/// <see cref="ExceptionHandler"/>, until the given <see cref="Predicate{TReturn}"/> returns
+		/// <c>true</c>.
 		/// </summary>
+		/// <param name="func">The delegate to be performed.</param>
+		/// <param name="until">A predicate that halts the execution of the delegate once it returns
+		/// <c>true</c>.</param>
+		/// <returns>The return value of the delegate when <paramref name="until"/> returned <c>true</c>,
+		/// or a default value if <paramref name="until"/> was <c>false</c> for all components.</returns>
 		protected TReturn ForEachComponent<TReturn>(Func<T, TReturn> func, Predicate<TReturn> until)
 		{
 			IEnumerator<T> enumerator = Enumerator;
@@ -202,10 +220,12 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Perform a delegate on each enabled component, stopping when the first of them returns true. The return
-		/// value is true if any component return true. Any exceptions thrown by delegates will be
-		/// caught and handled by <see cref="ExceptionHandler"/>.
+		/// Perform a delegate on each enabled component, catching exceptions and handling them with 
+		/// <see cref="ExceptionHandler"/>, until the delegate returns <c>true</c>.
 		/// </summary>
+		/// <param name="func">The delegate to be performed.</param>
+		/// <returns>The return value of the delegate from the last component on which it was
+		/// executed.</returns>
 		protected bool ForEachComponent(Func<T, bool> func)
 		{
 			IEnumerator<T> enumerator = Enumerator;
@@ -235,8 +255,10 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Extend this method to perform additional behaviour when new components are registered.
+		/// Updates the internal <see cref="IEnumerator{T}"/> used to iterate over components. Implementers
+		/// can override this method to perform actions on newly-registered components.
 		/// </summary>
+		/// <param name="components">The component or components registered.</param>
 		protected virtual void OnComponentsRegistered(IEnumerable<T> components)
 		{
 			if (components.Any())

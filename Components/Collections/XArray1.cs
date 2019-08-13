@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
@@ -8,12 +7,35 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XArray1<T> : XCollection<T[], T>
 	{
-		internal XArray1() { }
+		internal XArray1(XType<T[]> xType) : base(xType) { }
 
-		protected override void AddItem(T[] collection, T item) { }
+		protected override void AddItem(T[] collection, int index, T item) =>
+			collection.SetValue(item, collection.GetLowerBound(0) + index);
 
-		protected override void OnBuild(XType<T[]> xType, IXReadOperation reader, XElement element, ObjectBuilder<T[]> objectBuilder)
+		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<T[]> objectBuilder,
+			XObjectArgs args)
 		{
+			XCollectionArgs collectionArgs = args as XCollectionArgs ?? new XCollectionArgs(default, ItemsAsElements, ItemName);
+
+			// Read in items
+
+			IEnumerable<XElement> itemElements = GetItemElements(element, collectionArgs);
+
+			object[] itemsRead = Enumerable.Repeat(XmlTools.PlaceholderObject, itemElements.Count()).ToArray();
+
+			int i = 0;
+
+			foreach (XElement item in itemElements)
+			{
+				int idx = i++;
+				reader.Read(item, ItemType, x =>
+					{
+						itemsRead[idx] = x;
+						return true;
+					},
+					collectionArgs.ItemArgs);
+			}
+
 			// Determine array lower bound
 
 			int lb = 0;
@@ -29,43 +51,38 @@ namespace XMachine.Components.Collections
 
 			// Instantiate the object
 
-			IEnumerable<XElement> itemElements = ItemsAsElements ? element.Elements() : element.Elements(ItemName);
-
-			objectBuilder.Object = lb == 0
-				? new T[itemElements.Count()]
-				: (T[])Array.CreateInstance(typeof(T), new int[1] { itemElements.Count() }, new int[1] { lb });
-
-			// Read in items
-
-			if (objectBuilder.Object.Length > 0)
+			reader.AddTask(this, () =>
 			{
-				foreach (XElement subElement in itemElements)
+				if (!itemsRead.Any(x => ReferenceEquals(x, XmlTools.PlaceholderObject)))
 				{
-					int idx = lb++;
-					reader.Read<T>(subElement, x =>
+					T[] array = lb == 0
+						? new T[itemElements.Count()]
+						: (T[])Array.CreateInstance(typeof(T), new int[1] { itemElements.Count() }, new int[1] { lb });
+
+					for (int j = 0; j < itemsRead.Length; j++)
 					{
-						objectBuilder.Object[idx] = x;
-						return true;
-					},
-					ReaderHints.IgnoreElementName);
+						array[lb + j] = (T)itemsRead[j];
+					}
+
+					objectBuilder.Object = array;
+
+					return true;
 				}
-			}
+				return false;
+			});
 		}
 
-		protected override bool OnWrite(XType<T[]> xType, IXWriteOperation writer, T[] obj, XElement element)
+		protected override bool OnWrite(IXWriteOperation writer, T[] obj, XElement element, XObjectArgs args)
 		{
+			_ = base.OnWrite(writer, obj, element, args);
+
+			// Record lower bound if non-zero
+
 			int lb = obj.GetLowerBound(0);
 
 			if (lb != 0)
 			{
 				element.SetAttributeValue(XComponents.Component<XAutoCollections>().ArrayLowerBoundName, XmlTools.Write(lb));
-			}
-
-			IEnumerator enumerator = EnumerateItems(obj);
-
-			while (enumerator.MoveNext())
-			{
-				element.Add(writer.WriteTo(new XElement(ItemName), (T)enumerator.Current));
 			}
 
 			return true;

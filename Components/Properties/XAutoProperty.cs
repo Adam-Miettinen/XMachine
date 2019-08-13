@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Xml.Serialization;
+using XMachine.Components.Collections;
 using XMachine.Reflection;
 
 namespace XMachine.Components.Properties
@@ -20,6 +21,10 @@ namespace XMachine.Components.Properties
 			else if (propertyInfo.HasCustomAttribute<XmlTextAttribute>())
 			{
 				WriteAs = PropertyWriteMode.Text;
+			}
+			else if (propertyInfo.GetCustomAttribute<XmlElementAttribute>() is XmlElementAttribute xea)
+			{
+				WithArgs = new XCollectionArgs(default, true, xea.ElementName);
 			}
 		}
 

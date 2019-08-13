@@ -5,19 +5,20 @@ namespace XMachine.Components
 {
 	/// <summary>
 	/// <see cref="XTexter{T}"/> reads and writes an object of type <typeparamref name="T"/> to and from
-	/// the string value of an XML attribute or element. This is ideal for very simple objects.
+	/// the text content of an XML attribute or element. This is ideal for simple objects: primitive
+	/// types are automatically read and written as text.
 	/// </summary>
 	public sealed class XTexter<T> : XTypeComponent<T>
 	{
-		private static readonly Func<T, string> toStringWriter = (x) => x.ToString();
-
 		private Func<string, T> reader;
-		private Func<T, string> writer;
 
 		/// <summary>
-		/// Create a new text reader/writer using the given delegates.
+		/// Create a new <see cref="XTexter{T}"/> using the given delegates.
 		/// </summary>
-		public XTexter(Func<string, T> reader, Func<T, string> writer = null)
+		/// <param name="xType">The <see cref="XType{T}"/> object to which this <see cref="XTypeComponent{T}"/> belongs.</param>
+		/// <param name="reader">A delegate that creates a <typeparamref name="T"/> from a <see cref="string"/>.</param>
+		/// <param name="writer">A delegate that creates a <see cref="string"/> from a <typeparamref name="T"/>.</param>
+		public XTexter(XType<T> xType, Func<string, T> reader, Func<T, string> writer = null) : base(xType)
 		{
 			Reader = reader;
 			Writer = writer;
@@ -36,45 +37,32 @@ namespace XMachine.Components
 		/// Get or set the writer delegate. If no value or a null value is set, <typeparamref name="T"/>'s
 		/// ToString() method will be used.
 		/// </summary>
-		public Func<T, string> Writer
-		{
-			get => writer ?? toStringWriter;
-			set => writer = value;
-		}
+		public Func<T, string> Writer { get; set; }
 
-		/// <summary>
-		/// Reads an object of type <typeparamref name="T"/> from the text of an element.
-		/// </summary>
-		protected override bool OnRead(XType<T> xType, IXReadOperation reader, XElement element, out T result)
+		protected override bool OnRead(IXReadOperation reader, XElement element, out T result, XObjectArgs args)
 		{
 			result = Reader(XmlTools.GetElementText(element));
 			return true;
 		}
 
-		/// <summary>
-		/// Reads an object of type <typeparamref name="T"/> from the text of an attribute.
-		/// </summary>
-		protected override bool OnRead(XType<T> xType, IXReadOperation reader, XAttribute attribute, out T result)
+		protected override bool OnRead(IXReadOperation reader, XAttribute attribute, out T result, XObjectArgs args)
 		{
 			result = Reader(attribute.Value);
 			return true;
 		}
 
-		/// <summary>
-		/// Write the object as a string into the given element.
-		/// </summary>
-		protected override bool OnWrite(XType<T> xType, IXWriteOperation writer, T obj, XElement element)
+		protected override bool OnWrite(IXWriteOperation writer, T obj, XElement element, XObjectArgs args)
 		{
-			element.Add(XmlTools.WriteText(Writer(obj)));
+			element.Add(XmlTools.WriteText(Writer == null ? obj.ToString() : Writer(obj)));
 			return true;
 		}
 
-		/// <summary>
-		/// Write the object as a string into the given attribute.
-		/// </summary>
-		protected override bool OnWrite(XType<T> xType, IXWriteOperation writer, T obj, XAttribute attribute)
+		protected override bool OnWrite(IXWriteOperation writer, T obj, XAttribute attribute, XObjectArgs args)
 		{
-			attribute.Value = attribute.Value == null ? Writer(obj) : (attribute.Value + Writer(obj));
+			string value = Writer == null ? obj.ToString() : Writer(obj);
+			attribute.Value = attribute.Value == null
+				? value
+				: (attribute.Value + value);
 			return true;
 		}
 	}

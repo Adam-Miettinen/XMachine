@@ -6,9 +6,9 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XStack<TStack, TItem> : XCollection<TStack, TItem> where TStack : Stack<TItem>
 	{
-		internal XStack() { }
+		internal XStack(XType<TStack> xType) : base(xType) { }
 
-		protected override void AddItem(TStack collection, TItem item) => collection.Push(item);
+		protected override void AddItem(TStack collection, int index, TItem item) => collection.Push(item);
 
 		protected override IEnumerator EnumerateItems(TStack collection) => collection.Reverse().GetEnumerator();
 	}

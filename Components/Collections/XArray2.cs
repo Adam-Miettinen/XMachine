@@ -1,17 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Xml.Linq;
 
 namespace XMachine.Components.Collections
 {
-	internal sealed class XArray2<T> : XCollection<T[,], T>
+	internal sealed class XArray2<T> : XCollection<T[,]>
 	{
-		internal XArray2() { }
+		internal XArray2(XType<T[,]> xType) : base(xType) { }
 
-		protected override void AddItem(T[,] collection, T item) { }
+		protected override Type ItemType => throw new NotImplementedException();
 
-		protected override void OnBuild(XType<T[,]> xType, IXReadOperation reader, XElement element, ObjectBuilder<T[,]> objectBuilder)
+		protected override void AddItem(T[,] collection, int index, object item) =>
+			throw new NotImplementedException();
+
+		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<T[,]> objectBuilder, XObjectArgs args)
 		{
 			// Read as a jagged array
 
@@ -60,7 +61,7 @@ namespace XMachine.Components.Collections
 			});
 		}
 
-		protected override bool OnWrite(XType<T[,]> xType, IXWriteOperation writer, T[,] obj, XElement element)
+		protected override bool OnWrite(IXWriteOperation writer, T[,] obj, XElement element, XObjectArgs args)
 		{
 			// Get lower bound and length
 

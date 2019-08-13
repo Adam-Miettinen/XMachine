@@ -4,8 +4,8 @@ using System.Xml.Linq;
 namespace XMachine.Components.Properties
 {
 	/// <summary>
-	/// A set of bitflags describing how an <see cref="XProperty{TType, TProperty}"/> is read from
-	/// and written to XML.
+	/// A set of bitflags describing the format in which <see cref="XProperty{TType, TProperty}"/> should be
+	/// written to XML.
 	/// </summary>
 	[Flags]
 	public enum PropertyWriteMode
@@ -22,8 +22,8 @@ namespace XMachine.Components.Properties
 		Attribute = 1,
 
 		/// <summary>
-		/// Write the property as inner text. Such properties must have a runtime type equal to their 
-		/// declared type, and their declared type must have an <see cref="XTexter{T}"/>.
+		/// Write the property as an <see cref="XText"/> node. Such properties must have a runtime type equal
+		/// to their declared type, and their declared type must have an <see cref="XTexter{T}"/>.
 		/// </summary>
 		Text = 2
 	}

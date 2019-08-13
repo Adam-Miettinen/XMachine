@@ -9,10 +9,10 @@ using System.Xml.Linq;
 namespace XMachine.Namers
 {
 	/// <summary>
-	/// An implementation of <see cref="XNamer"/> that generates <see cref="XName"/>s for <see cref="Type"/>s
-	/// based on type names.
+	/// An implementation of <see cref="CachedXNamer"/> that maps XML to <see cref="Type"/> objects using
+	/// <see cref="Type"/> names and the <see cref="XName"/>s of XML elements.
 	/// </summary>
-	public sealed class DefaultXNamer : AbstractXNamer
+	public sealed class DefaultXNamer : CachedXNamer
 	{
 		private const string arrayName = "Array";
 
@@ -37,28 +37,34 @@ namespace XMachine.Namers
 			{ typeof(string), "string" }
 		};
 
-		/// <summary>
-		/// Whether this namer includes the declaring type/namespace/assembly in <see cref="XName"/>s.
-		/// </summary>
-		public readonly bool IncludesDeclaring, IncludesNamespace, IncludesAssembly;
+		private readonly bool includesDeclaring, includesNamespace, includesAssembly;
 
 		/// <summary>
-		/// Create a new <see cref="DefaultXNamer"/>.
+		/// Create a new instance of <see cref="DefaultXNamer"/>.
 		/// </summary>
+		/// <param name="includeDeclaring">If element names of nested types should be prepended with the name of the 
+		/// declaring type.</param>
+		/// <param name="includeNamespace">If element names should be prepended with types' namespaces.</param>
+		/// <param name="includeAssembly">If element names should be prepended with typess assembly names.</param>
 		public DefaultXNamer(bool includeDeclaring = false, bool includeNamespace = false, bool includeAssembly = false) :
 			this(null, includeDeclaring, includeNamespace, includeAssembly)
-		{
-		}
+		{ }
 
 		/// <summary>
-		/// Create a new <see cref="DefaultXNamer"/>.
+		/// Create a new instance of <see cref="DefaultXNamer"/>.
 		/// </summary>
+		/// <param name="nameOverrides">An <see cref="IDictionary{TKey, TValue}"/> of <see cref="Type"/>-<see cref="XName"/>
+		/// mappings that should override the defaults.</param>
+		/// <param name="includeDeclaring">If element names of nested types should be prepended with the name of the 
+		/// declaring type.</param>
+		/// <param name="includeNamespace">If element names should be prepended with types' namespaces.</param>
+		/// <param name="includeAssembly">If element names should be prepended with typess assembly names.</param>
 		public DefaultXNamer(IDictionary<Type, XName> nameOverrides, bool includeDeclaring = false, bool includeNamespace = false,
 			bool includeAssembly = false)
 		{
-			IncludesDeclaring = includeDeclaring;
-			IncludesNamespace = includeNamespace;
-			IncludesAssembly = includeAssembly;
+			includesDeclaring = includeDeclaring;
+			includesNamespace = includeNamespace;
+			includesAssembly = includeAssembly;
 
 			foreach (KeyValuePair<Type, XName> kv in defaultNameOverrides)
 			{
@@ -74,9 +80,6 @@ namespace XMachine.Namers
 			}
 		}
 
-		/// <summary>
-		/// Names the given type.
-		/// </summary>
 		protected override string GetName(Type type)
 		{
 			string name;
@@ -100,14 +103,8 @@ namespace XMachine.Namers
 			return null;
 		}
 
-		/// <summary>
-		/// Attempt to parse an XName backward to a Type.
-		/// </summary>
 		protected override Type ParseXName(XName xName) => ParseTypeName(TypeNameLexer.Parse(xName));
 
-		/// <summary>
-		/// Ignores collisions.
-		/// </summary>
 		protected override Type ResolveCollision(XName xName, Type type1, Type type2) => type1;
 
 		private Type ParseTypeName(TypeName typeName)
@@ -155,21 +152,22 @@ namespace XMachine.Namers
 
 			StringBuilder sb = new StringBuilder(64);
 
-			if (IncludesAssembly)
+			if (includesAssembly)
 			{
 				_ = sb.Append(type.Assembly.GetName().Name).Append(TypeNameLexer.JoinDefinitionParts);
 			}
-			if (IncludesNamespace)
+			if (includesNamespace)
 			{
 				_ = sb.Append(type.Namespace).Append(TypeNameLexer.JoinDefinitionParts);
 			}
-			if (IncludesDeclaring)
+			if (includesDeclaring)
 			{
 				Type declaring = type;
 
 				while ((declaring = declaring.DeclaringType) != null)
 				{
-					_ = sb.Append(declaring.Name.Split('`')[0]).Append(TypeNameLexer.JoinDefinitionParts);
+					string declaringName = declaring.Name.Split('`')[0];
+					_ = sb.Append(declaringName).Append(TypeNameLexer.JoinDefinitionParts);
 				}
 			}
 

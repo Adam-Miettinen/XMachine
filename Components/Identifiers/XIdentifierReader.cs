@@ -6,8 +6,8 @@ using XMachine.Reflection;
 namespace XMachine.Components.Identifiers
 {
 	/// <summary>
-	/// The <see cref="XIdentifierReader"/> represents a set of <see cref="XIdentifier{TType, TId}"/> objects active 
-	/// on an <see cref="XReader"/>.
+	/// The <see cref="XIdentifierReader"/> component uses a set of <see cref="XIdentifier{TType, TId}"/> objects to
+	/// allow an <see cref="XReader"/> to deserialize objects that were serialized by reference.
 	/// </summary>
 	public sealed class XIdentifierReader : XReaderComponent
 	{
@@ -26,15 +26,13 @@ namespace XMachine.Components.Identifiers
 		}
 
 		/// <summary>
-		/// The <see cref="XCompositeIdentifier"/> object used by <see cref="XIdentifiers"/> to store 
-		/// <see cref="XIdentifier{TType, TId}"/> objects affecting this read operation.
+		/// The <see cref="XCompositeIdentifier"/> object used to store the <see cref="XIdentifier{TType, TId}"/> 
+		/// objects affecting this read operation.
 		/// </summary>
 		public XCompositeIdentifier Identifier { get; }
 
-		/// <summary>
-		/// Resolves the element as a reference if possible
-		/// </summary>
-		protected override bool OnRead<T>(IXReadOperation reader, XType<T> xType, XElement element, Func<object, bool> assign)
+		protected override bool OnRead<T>(IXReadOperation reader, XType<T> xType, XElement element, Func<object, bool> assign,
+			XObjectArgs args)
 		{
 			Type type = typeof(T);
 
@@ -61,7 +59,7 @@ namespace XMachine.Components.Identifiers
 					}
 					return true;
 				},
-				ReaderHints.IgnoreElementName);
+				XObjectArgs.DefaultIgnoreElementName);
 
 				// Schedule a task to assign the object if it shows up in the dictionary
 
@@ -98,10 +96,8 @@ namespace XMachine.Components.Identifiers
 			return false;
 		}
 
-		/// <summary>
-		/// Resolves the attribute as a reference if possible
-		/// </summary>
-		protected override bool OnRead<T>(IXReadOperation reader, XType<T> xType, XAttribute attribute, Func<object, bool> assign)
+		protected override bool OnRead<T>(IXReadOperation reader, XType<T> xType, XAttribute attribute, Func<object, bool> assign,
+			XObjectArgs args)
 		{
 			Type type = typeof(T);
 
@@ -134,9 +130,6 @@ namespace XMachine.Components.Identifiers
 			return false;
 		}
 
-		/// <summary>
-		/// Register a constructed object as a reference
-		/// </summary>
 		protected override void OnSubmit(IXReadOperation reader, object obj)
 		{
 			if (obj != null && Identifier.CanId(obj.GetType()))

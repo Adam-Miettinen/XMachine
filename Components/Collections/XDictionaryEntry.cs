@@ -8,7 +8,7 @@ namespace XMachine.Components.Collections
 		internal XDictionaryEntry() { }
 
 		protected override void OnBuild(XType<DictionaryEntry> xType, IXReadOperation reader,
-			XElement element, ObjectBuilder<DictionaryEntry> objectBuilder)
+			XElement element, ObjectBuilder<DictionaryEntry> objectBuilder, XObjectArgs args)
 		{
 			XName keyName = XComponents.Component<XAutoCollections>().KeyName,
 				valueName = XComponents.Component<XAutoCollections>().ValueName;
@@ -27,7 +27,7 @@ namespace XMachine.Components.Collections
 				key = x;
 				return foundKey = true;
 			},
-			ReaderHints.IgnoreElementName);
+			XObjectArgs.DefaultIgnoreElementName);
 
 			XElement valueElement = element.Element(valueName);
 			if (valueElement != null)
@@ -37,7 +37,7 @@ namespace XMachine.Components.Collections
 					value = x;
 					return foundValue = true;
 				},
-				ReaderHints.IgnoreElementName);
+				XObjectArgs.DefaultIgnoreElementName);
 			}
 			else
 			{
@@ -56,7 +56,7 @@ namespace XMachine.Components.Collections
 		}
 
 		protected override bool OnWrite(XType<DictionaryEntry> xType, IXWriteOperation writer,
-			DictionaryEntry obj, XElement element)
+			DictionaryEntry obj, XElement element, XObjectArgs args)
 		{
 			XName keyName = XComponents.Component<XAutoCollections>().KeyName,
 				valueName = XComponents.Component<XAutoCollections>().ValueName;

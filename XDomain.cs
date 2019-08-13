@@ -3,10 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
-using XMachine;
 using XMachine.Namers;
-
-[assembly: XMachineAssembly]
 
 namespace XMachine
 {
@@ -27,7 +24,8 @@ namespace XMachine
 
 		/// <summary>
 		/// A global instance of the <see cref="XDomain"/> class. The instance is not initialized until accessed for the first
-		/// time. If set to null, it will be garbage collected and not re-instantiated until accessed again.
+		/// time. If set to null, it will be garbage collected (assuming no other references have been retained) and not 
+		/// re-instantiated until accessed again.
 		/// </summary>
 		public static XDomain Global
 		{
@@ -66,9 +64,9 @@ namespace XMachine
 		private Action<Exception> exceptionHandler;
 
 		/// <summary>
-		/// Create a new instance of <see cref="XDomain"/> using <see cref="DefaultXNamer"/>.
+		/// Create a new instance of <see cref="XDomain"/> using a new <see cref="DefaultXNamer"/>.
 		/// </summary>
-		public XDomain() : this(new DefaultXNamer()) => Namer.ExceptionHandler = ExceptionHandler;
+		public XDomain() : this(new DefaultXNamer()) { }
 
 		/// <summary>
 		/// Create a new <see cref="XDomain"/> instance with the given <see cref="XNamer"/>.
@@ -77,41 +75,53 @@ namespace XMachine
 		{
 			Namer = namer ?? throw new ArgumentNullException($"{nameof(XDomain)} must be initialized with a non-null namer.");
 			Namer.ExceptionHandler = ExceptionHandler;
-			XComponents.InitializeStatic();
 			XComponents.OnXDomainCreated(this);
 		}
 
 		/// <summary>
-		/// Get or set a delegate that controls how exceptions are handled.
+		/// Get or set the delegate that handles <see cref="Exception"/>s.
 		/// </summary>
 		public Action<Exception> ExceptionHandler
 		{
-			get => exceptionHandler ?? (ExceptionHandler = XComponents.ThrowHandler);
+			get => exceptionHandler ?? XmlTools.ThrowHandler;
 			set => Namer.ExceptionHandler = exceptionHandler = value;
 		}
 
 		/// <summary>
-		/// Get the <see cref="XNamer"/> used by this instance.
+		/// Get the <see cref="XNamer"/> in use.
 		/// </summary>
 		public XNamer Namer { get; }
 
 		/// <summary>
-		/// Returns an <see cref="XType{TType}"/> object that controls how the provided type <typeparamref name="T"/> 
+		/// Get an <see cref="XType{T}"/> object that controls how the provided type <typeparamref name="T"/> 
 		/// will be read from and written to XML.
 		/// </summary>
+		/// <returns>An instance of <see cref="XType{T}"/>.</returns>
 		public XType<T> Reflect<T>() => XTypeBox.Unbox<T>(ReflectFromType(typeof(T)));
 
 		/// <summary>
-		/// Generates a new <see cref="XReader"/> object that can be used to perform a read operation within this
+		/// Get a new <see cref="XReader"/> object that can be used to perform a read operation within this
 		/// <see cref="XDomain"/>.
 		/// </summary>
-		public XReader GetReader() => XComponents.GetReader(this);
+		/// <returns>An instance of <see cref="XReader"/>.</returns>
+		public XReader GetReader()
+		{
+			XReader reader = new XReaderImpl(this);
+			XComponents.OnReaderCreated(reader);
+			return reader;
+		}
 
 		/// <summary>
-		/// Generates a new <see cref="XWriter"/> object that can be used to perform a write operation within this 
+		/// Get a new <see cref="XWriter"/> object that can be used to perform a write operation within this 
 		/// <see cref="XDomain"/>.
 		/// </summary>
-		public XWriter GetWriter() => XComponents.GetWriter(this);
+		/// <returns>An instance of <see cref="XWriter"/>.</returns>
+		public XWriter GetWriter()
+		{
+			XWriter writer = new XWriterImpl(this);
+			XComponents.OnWriterCreated(writer);
+			return writer;
+		}
 
 		/// <summary>
 		/// Reset the <see cref="XDomain"/>, clearing it and its <see cref="Namer"/> of mappings between <see cref="Type"/>s,
@@ -130,15 +140,13 @@ namespace XMachine
 		{
 			if (type == null)
 			{
-				throw new ArgumentNullException("Can't reflect null type");
-			}
-			if (type.IsXIgnored())
-			{
-				throw new InvalidOperationException($"Can't reflect the ignored type {type}.");
+				throw new ArgumentNullException(nameof(type));
 			}
 
 			lock (locker)
 			{
+				// Check if XType created already, create one if not
+
 				return xTypes.TryGetValue(type, out XTypeBox reflect)
 					? reflect
 					: MakeXType(type);
@@ -202,11 +210,7 @@ namespace XMachine
 		{
 			Type type = typeof(T);
 
-			if (type.IsXIgnored())
-			{
-				ExceptionHandler(new InvalidOperationException($"Could not reflect the ignored type {type.Name} found in XML"));
-				return null;
-			}
+			// Get a name
 
 			XName name = Namer[type];
 			if (name == null)
@@ -214,6 +218,8 @@ namespace XMachine
 				ExceptionHandler(new InvalidOperationException($"Namer failed to generate XName for {type.Name}."));
 				return null;
 			}
+
+			// Instantiate a new XType
 
 			XType<T> xType = new XType<T>(this, name);
 
@@ -223,7 +229,7 @@ namespace XMachine
 			xType.Initialize();
 			XComponents.OnXTypeCreatedLate(xType);
 
-			// Create an untyped "box" for the XType that contains some useful delegates
+			// Create an untyped "box" for the XType
 
 			XTypeBox box = XTypeBox.Box(xType);
 			xTypes.Add(type, box);

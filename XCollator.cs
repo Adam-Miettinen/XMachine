@@ -8,17 +8,17 @@ using System.Xml.Linq;
 namespace XMachine
 {
 	/// <summary>
-	/// A small utility class for reading and writing <see cref="XElement"/> objects to and from files. Each instance
-	/// encompasses an instance of <see cref="XmlReaderSettings"/> and an instance of <see cref="XmlWriterSettings"/>.
-	/// <see cref="XCollator"/> has very little overhead, but for a default implementation, its methods are available
-	/// statically in <see cref="XmlTools"/>.
+	/// A small utility class for reading and writing <see cref="XElement"/>s to and from files. Each <see cref="XCollator"/>
+	/// instance contains mutable instances of <see cref="XmlReaderSettings"/> and <see cref="XmlWriterSettings"/>.
 	/// </summary>
-	public class XCollator
+	public class XCollator : IExceptionHandler
 	{
+		private Action<Exception> exceptionHandler;
+
 		/// <summary>
 		/// The <see cref="XmlReaderSettings"/> to be used when reading.
 		/// </summary>
-		public readonly XmlReaderSettings ReaderSettings = new XmlReaderSettings()
+		public readonly XmlReaderSettings ReaderSettings = new XmlReaderSettings
 		{
 			CloseInput = true,
 			IgnoreComments = true,
@@ -29,7 +29,7 @@ namespace XMachine
 		/// <summary>
 		/// The <see cref="XmlWriterSettings"/> to be used when writing.
 		/// </summary>
-		public readonly XmlWriterSettings WriterSettings = new XmlWriterSettings()
+		public readonly XmlWriterSettings WriterSettings = new XmlWriterSettings
 		{
 			Encoding = Encoding.UTF8,
 			Indent = true,
@@ -39,9 +39,19 @@ namespace XMachine
 		};
 
 		/// <summary>
-		/// Reads each of the given XML files, producing an <see cref="IEnumerable{T}"/> over the root
-		/// elements of the files.
+		/// Get or set the delegate that handles <see cref="Exception"/>s.
 		/// </summary>
+		public Action<Exception> ExceptionHandler
+		{
+			get => exceptionHandler ?? XmlTools.ThrowHandler;
+			set => exceptionHandler = value;
+		}
+
+		/// <summary>
+		/// Reads the given XML files.
+		/// </summary>
+		/// <param name="files">The paths of the files to read.</param>
+		/// <returns>An <see cref="IEnumerable{T}"/> over the root elements of the files.</returns>
 		public IEnumerable<XElement> ReadFiles(IEnumerable<string> files)
 		{
 			foreach (string file in files ??
@@ -52,9 +62,10 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Reads each of the given XML files, producing an <see cref="IEnumerable{T}"/> over the root
-		/// elements of the files.
+		/// Reads the given XML files.
 		/// </summary>
+		/// <param name="streams">Streams containing readable XML.</param>
+		/// <returns>An <see cref="IEnumerable{T}"/> over the root elements of the files.</returns>
 		public IEnumerable<XElement> ReadFiles(IEnumerable<Stream> streams)
 		{
 			foreach (Stream stream in streams ??
@@ -65,8 +76,10 @@ namespace XMachine
 		}
 
 		/// <summary>
-		/// Reads the given XML file and returns its root element.
+		/// Reads the given XML file.
 		/// </summary>
+		/// <param name="file">The path of the file to read.</param>
+		/// <returns>The root <see cref="XElement"/> of the document.</returns>
 		public XElement ReadFile(string file)
 		{
 			if (file == null)
@@ -83,6 +96,8 @@ namespace XMachine
 		/// <summary>
 		/// Reads XML from the given <see cref="Stream"/> and returns its root element.
 		/// </summary>
+		/// <param name="stream">The stream to read.</param>
+		/// <returns>The root <see cref="XElement"/> of the document.</returns>
 		public XElement ReadFile(Stream stream)
 		{
 			if (stream == null)
@@ -99,6 +114,8 @@ namespace XMachine
 		/// <summary>
 		/// Reads XML from the given <see cref="XmlReader"/> and returns the root element.
 		/// </summary>
+		/// <param name="xmlReader">The <see cref="XmlReader"/> to read from.</param>
+		/// <returns>The root <see cref="XElement"/> of the document.</returns>
 		public XElement ReadFile(XmlReader xmlReader)
 		{
 			if (xmlReader == null)
@@ -114,13 +131,16 @@ namespace XMachine
 			}
 			catch (Exception e)
 			{
-				throw new InvalidOperationException("Failed to read XML.", e);
+				ExceptionHandler(new InvalidOperationException("Failed to read XML.", e));
+				return null;
 			}
 		}
 
 		/// <summary>
 		/// Writes the given <see cref="XElement"/> to the given file.
 		/// </summary>
+		/// <param name="file">The path of the file to write to.</param>
+		/// <param name="root">The root <see cref="XElement"/> of the XML tree to write.</param>
 		public void WriteFile(string file, XElement root)
 		{
 			if (file == null)
@@ -138,6 +158,8 @@ namespace XMachine
 		/// <summary>
 		/// Writes the given <see cref="XElement"/> to the given <see cref="Stream"/>.
 		/// </summary>
+		/// <param name="stream">The stream to write to.</param>
+		/// <param name="root">The root <see cref="XElement"/> of the XML tree to write.</param>
 		public void WriteFile(Stream stream, XElement root)
 		{
 			if (stream == null)
@@ -155,6 +177,8 @@ namespace XMachine
 		/// <summary>
 		/// Writes the given <see cref="XElement"/> to the given <see cref="XmlWriter"/>.
 		/// </summary>
+		/// <param name="xmlWriter">The <see cref="XmlWriter"/> to write to.</param>
+		/// <param name="root">The root <see cref="XElement"/> of the XML tree to write.</param>
 		public void WriteFile(XmlWriter xmlWriter, XElement root)
 		{
 			if (xmlWriter == null)
@@ -162,14 +186,22 @@ namespace XMachine
 				throw new ArgumentNullException("XML writer is null.");
 			}
 
-			OnFileWrite(root);
-			new XDocument(root).Save(xmlWriter);
+			try
+			{
+				OnFileWrite(root);
+				new XDocument(root).Save(xmlWriter);
+			}
+			catch (Exception e)
+			{
+				ExceptionHandler(e);
+			}
 		}
 
 		/// <summary>
 		/// Called when a file has been read, but before its <see cref="XElement"/> value
 		/// (<paramref name="root"/>) has been returned.
 		/// </summary>
+		/// <param name="root">The root <see cref="XElement"/> of the file that was read.</param>
 		protected virtual void OnFileRead(XElement root)
 		{
 
@@ -179,6 +211,7 @@ namespace XMachine
 		/// Called immediately before an <see cref="XElement"/> (<paramref name="root"/>) is
 		/// written to file.
 		/// </summary>
+		/// <param name="root">The root <see cref="XElement"/> written to the file.</param>
 		protected virtual void OnFileWrite(XElement root)
 		{
 

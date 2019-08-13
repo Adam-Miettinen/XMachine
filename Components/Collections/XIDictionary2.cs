@@ -6,9 +6,9 @@ namespace XMachine.Components.Collections
 	internal sealed class XIDictionary<TDictionary, TKey, TValue> : XCollection<TDictionary, KeyValuePair<TKey, TValue>>
 		where TDictionary : IDictionary<TKey, TValue>
 	{
-		internal XIDictionary() { }
+		internal XIDictionary(XType<TDictionary> xType) : base(xType) { }
 
-		protected override void AddItem(TDictionary collection, KeyValuePair<TKey, TValue> item)
+		protected override void AddItem(TDictionary collection, int index, KeyValuePair<TKey, TValue> item)
 		{
 			if (item.Key == null)
 			{

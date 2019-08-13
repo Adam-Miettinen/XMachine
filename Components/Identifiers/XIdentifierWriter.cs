@@ -5,8 +5,8 @@ using System.Xml.Linq;
 namespace XMachine.Components.Identifiers
 {
 	/// <summary>
-	/// The <see cref="XIdentifierWriter"/> represents a set of <see cref="XIdentifier{TType, TId}"/> objects active 
-	/// on an <see cref="XWriter"/>.
+	/// An <see cref="XWriterComponent"/> that uses a set of <see cref="XIdentifier{TType, TId}"/> objects
+	/// to allow objects to be serialized by reference.
 	/// </summary>
 	public sealed class XIdentifierWriter : XWriterComponent
 	{
@@ -25,15 +25,12 @@ namespace XMachine.Components.Identifiers
 		}
 
 		/// <summary>
-		/// The <see cref="XCompositeIdentifier"/> object used by <see cref="XIdentifiers"/> to store 
-		/// <see cref="XIdentifier{TType, TId}"/> objects affecting this write operation.
+		/// The <see cref="XCompositeIdentifier"/> object used to store the <see cref="XIdentifier{TType, TId}"/> 
+		/// objects affecting this write operation.
 		/// </summary>
 		public XCompositeIdentifier Identifier { get; }
 
-		/// <summary>
-		/// Record the written object as a reference
-		/// </summary>
-		protected override bool OnWrite(IXWriteOperation writer, object obj, XElement element)
+		protected override bool OnWrite<T>(IXWriteOperation writer, T obj, XElement element, XObjectArgs args)
 		{
 			if (obj != null && Identifier.CanId(obj.GetType(), out Type idType))
 			{
@@ -49,10 +46,7 @@ namespace XMachine.Components.Identifiers
 			return false;
 		}
 
-		/// <summary>
-		/// Record the written object as a reference
-		/// </summary>
-		protected override bool OnWrite(IXWriteOperation writer, object obj, XAttribute attribute)
+		protected override bool OnWrite<T>(IXWriteOperation writer, T obj, XAttribute attribute, XObjectArgs args)
 		{
 			if (obj != null && Identifier.CanId(obj.GetType()))
 			{
@@ -68,9 +62,6 @@ namespace XMachine.Components.Identifiers
 			return false;
 		}
 
-		/// <summary>
-		/// Record a contextual object as a reference
-		/// </summary>
 		protected override void OnSubmit(IXWriteOperation writer, object obj)
 		{
 			if (obj != null && Identifier.CanId(obj.GetType()))

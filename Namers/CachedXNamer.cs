@@ -1,69 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Numerics;
-using System.Reflection;
 using System.Xml.Linq;
 
 namespace XMachine.Namers
 {
 	/// <summary>
 	/// An implementation of <see cref="XNamer"/> that caches all <see cref="XName"/>s for serializable types
-	/// on initialization. This improves speed at the cost of some memory.
+	/// at initialization. This improves speed at the cost of memory.
 	/// </summary>
-	public abstract class AbstractXNamer : XNamer
+	public abstract class CachedXNamer : XNamer
 	{
-		private static readonly IEnumerable<string> ignoredAssemblies = new string[]
-		{
-			"System.Configuration",
-			"System.Drawing",
-			"System.Runtime",
-			"System.Reflection",
-			"System.Threading",
-			"System.Xaml",
-			"System.Xml"
-		};
-
-		private static readonly Predicate<Assembly> ignoreAssembly = x =>
-			x.IsXIgnored() || ignoredAssemblies.Any(y => x.GetName().Name.StartsWith(y));
-
-		private static readonly IEnumerable<Type> priorityTypes = new Type[]
-		{
-			typeof(object),
-			typeof(bool),
-			typeof(char),typeof(string),
-			typeof(byte), typeof(sbyte),
-			typeof(decimal),
-			typeof(float), typeof(double),
-			typeof(int), typeof(uint),
-			typeof(long), typeof(ulong),
-			typeof(short), typeof(ushort),
-
-			typeof(DateTime), typeof(Version), typeof(BigInteger),
-
-			typeof(ICollection<>), typeof(Collection<>),
-			typeof(IList<>), typeof(List<>), typeof(LinkedList<>), typeof(LinkedListNode<>),
-			typeof(IDictionary<,>), typeof(Dictionary<,>), typeof(KeyValuePair<,>),
-			typeof(ISet<>), typeof(HashSet<>)
-		};
-
 		private readonly IDictionary<Type, XName> namesByType = new Dictionary<Type, XName>();
 		private readonly IDictionary<XName, Type> typesByName = new Dictionary<XName, Type>();
 
-		private bool initialized;
-
 		/// <summary>
-		/// Create an uninitialized <see cref="AbstractXNamer"/>.
+		/// Create a new instance of <see cref="CachedXNamer"/>.
 		/// </summary>
-		protected AbstractXNamer()
-		{
-		}
+		protected CachedXNamer() { }
 
 		/// <summary>
-		/// Get or set the <see cref="XName"/> associated with the given <see cref="Type"/>. Returns null if
+		/// Get or set the <see cref="XName"/> associated with the given <see cref="Type"/>. Gets null if
 		/// the <see cref="Type"/> is not eligible for a name.
 		/// </summary>
+		/// <param name="type">A <see cref="Type"/> to reference.</param>
 		public override XName this[Type type]
 		{
 			get
@@ -71,10 +30,6 @@ namespace XMachine.Namers
 				if (type == null)
 				{
 					throw new ArgumentNullException(nameof(type));
-				}
-				if (type.IsXIgnored(true))
-				{
-					return null;
 				}
 				if (namesByType.TryGetValue(type, out XName xName))
 				{
@@ -115,8 +70,9 @@ namespace XMachine.Namers
 		}
 
 		/// <summary>
-		/// Retrieve the <see cref="Type"/> matching a given <see cref="XName"/> from the cache.
+		/// Get the <see cref="Type"/> matching a given <see cref="XName"/> from the cache.
 		/// </summary>
+		/// <param name="name">An <see cref="XName"/> to look up.</param>
 		protected Type this[XName name] => typesByName.TryGetValue(name, out Type type) ? type : null;
 
 		/// <summary>
@@ -124,14 +80,12 @@ namespace XMachine.Namers
 		/// of already-named types, and if no matching entry is found, delegates the task to the implementing
 		/// class's <see cref="ParseXName(XName)"/> method.
 		/// </summary>
+		/// <param name="element">The <see cref="XElement"/> being checked.</param>
+		/// <param name="expectedType">The <see cref="Type"/> to which the return value of this method must be
+		/// assigned.</param>
+		/// <returns>A <see cref="Type"/> object to which <paramref name="element"/> resolves, or <c>null</c>.</returns>
 		protected override Type GetType(XElement element, Type expectedType)
 		{
-			if (!initialized)
-			{
-				initialized = true;
-				Initialize();
-			}
-
 			if (typesByName.TryGetValue(element.Name, out Type type))
 			{
 				return type;
@@ -139,53 +93,45 @@ namespace XMachine.Namers
 
 			type = ParseXName(element.Name);
 
-			if (type != null && !type.IsXIgnored())
+			if (type == null || !expectedType.IsAssignableFrom(type))
+			{
+				return null;
+			}
+			else
 			{
 				Put(type, element.Name);
 				return type;
 			}
-
-			return null;
 		}
 
 		/// <summary>
-		/// Called when <see cref="XMachine"/> scans a new <see cref="Assembly"/>.
+		/// Called when <see cref="XComponents"/> detects that a new assembly has been loaded, and the assembly is
+		/// tagged with <see cref="XMachineAssemblyAttribute"/>. All public <see cref="Type"/> objects defined in
+		/// the assembly will be passed to this method excluding arrays, constructed generics, COM objects, and 
+		/// imported types.
 		/// </summary>
-		protected override void OnAssemblyScan(Assembly assembly)
-		{
-			if (ignoreAssembly(assembly))
-			{
-				return;
-			}
-
-			try
-			{
-				foreach (Type type in assembly.ExportedTypes.Where(x =>
-					!x.IsXIgnored() && !x.IsArray && !x.IsCOMObject && !x.IsImport &&
-					(!x.IsGenericType || x.IsGenericTypeDefinition)))
-				{
-					_ = this[type];
-				}
-			}
-			catch
-			{ }
-		}
+		/// <param name="type">The <see cref="Type"/> object to inspect.</param>
+		protected override void OnInspectType(Type type) => _ = this[type];
 
 		/// <summary>
-		/// Implement this method to provide a string name for a <see cref="Type"/> object.
+		/// Implement this method to provide a name for a <see cref="Type"/> object.
 		/// </summary>
 		protected abstract string GetName(Type type);
 
 		/// <summary>
-		/// Override this method to parse, and retrieve a <see cref="Type"/> object for, an <see cref="XName"/>.
+		/// Override this method to parse, and retrieve a <see cref="Type"/> for, an <see cref="XName"/>.
 		/// </summary>
+		/// <param name="xName">The <see cref="XName"/> of the <see cref="XElement"/> being resolved.</param>
+		/// <returns>A <see cref="Type"/> to which <paramref name="xName"/> resolves.</returns>
 		protected abstract Type ParseXName(XName xName);
 
 		/// <summary>
 		/// Override this method to resolve cases where the same <see cref="XName"/> is being assigned to more than one 
-		/// <see cref="Type"/>. The first type parameter, <paramref name="type1"/>, is currently assigned the XName
-		/// <paramref name="xName"/>. The second type parameter, <paramref name="type2"/>, is unassigned.
+		/// <see cref="Type"/>.
 		/// </summary>
+		/// <param name="xName">The <see cref="XName"/> being assigned.</param>
+		/// <param name="type1">The <see cref="Type"/> that is currently assigned <paramref name="xName"/>.</param>
+		/// <param name="type2">The <see cref="Type"/> that has just been resolved to <see cref="xName"/>.</param>
 		/// <returns>The <see cref="Type"/> object that should be assigned the <see cref="XName"/>, or null if the
 		/// assignment to that <see cref="XName"/> should be removed.</returns>
 		protected virtual Type ResolveCollision(XName xName, Type type1, Type type2)
@@ -211,19 +157,6 @@ namespace XMachine.Namers
 
 			typesByName.Add(name, type);
 			namesByType.Add(type, name);
-		}
-
-		private void Initialize()
-		{
-			foreach (Type type in priorityTypes)
-			{
-				_ = this[type];
-			}
-
-			foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-			{
-				OnAssemblyScan(assembly);
-			}
 		}
 	}
 }
