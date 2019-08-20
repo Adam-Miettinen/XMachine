@@ -20,6 +20,7 @@ namespace XMachine
 
 		private static readonly object staticLocker = new object();
 
+		private static readonly IList<WeakReference<XDomain>> domains = new List<WeakReference<XDomain>>();
 		private static XDomain global;
 
 		/// <summary>
@@ -58,6 +59,30 @@ namespace XMachine
 			}
 		}
 
+		/// <summary>
+		/// Enumerate the <see cref="XDomain"/>s that exist in this <see cref="AppDomain"/>.
+		/// </summary>
+		public static IEnumerable<XDomain> Domains
+		{
+			get
+			{
+				lock (staticLocker)
+				{
+					for (int i = 0; i < domains.Count; i++)
+					{
+						if (domains[i].TryGetTarget(out XDomain domain))
+						{
+							yield return domain;
+						}
+						else
+						{
+							domains.RemoveAt(i--);
+						}
+					}
+				}
+			}
+		}
+
 		private readonly IDictionary<Type, XTypeBox> xTypes = new Dictionary<Type, XTypeBox>();
 		private readonly object locker = new object();
 
@@ -76,6 +101,7 @@ namespace XMachine
 			Namer = namer ?? throw new ArgumentNullException($"{nameof(XDomain)} must be initialized with a non-null namer.");
 			Namer.ExceptionHandler = ExceptionHandler;
 			XComponents.OnXDomainCreated(this);
+			domains.Add(new WeakReference<XDomain>(this));
 		}
 
 		/// <summary>

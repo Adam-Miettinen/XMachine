@@ -46,7 +46,7 @@ namespace XMachine.Namers
 		/// declaring type.</param>
 		/// <param name="includeNamespace">If element names should be prepended with types' namespaces.</param>
 		/// <param name="includeAssembly">If element names should be prepended with typess assembly names.</param>
-		public DefaultXNamer(bool includeDeclaring = false, bool includeNamespace = false, bool includeAssembly = false) :
+		public DefaultXNamer(bool includeDeclaring = true, bool includeNamespace = false, bool includeAssembly = false) :
 			this(null, includeDeclaring, includeNamespace, includeAssembly)
 		{ }
 
@@ -59,7 +59,7 @@ namespace XMachine.Namers
 		/// declaring type.</param>
 		/// <param name="includeNamespace">If element names should be prepended with types' namespaces.</param>
 		/// <param name="includeAssembly">If element names should be prepended with typess assembly names.</param>
-		public DefaultXNamer(IDictionary<Type, XName> nameOverrides, bool includeDeclaring = false, bool includeNamespace = false,
+		public DefaultXNamer(IDictionary<Type, XName> nameOverrides, bool includeDeclaring = true, bool includeNamespace = false,
 			bool includeAssembly = false)
 		{
 			includesDeclaring = includeDeclaring;

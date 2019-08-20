@@ -158,23 +158,23 @@ namespace XMachine
 				}
 			};
 
-		private static bool ignoreAll = true;
+		private static bool scanUnknownAssemblies = false;
 
 		/// <summary>
-		/// Get or set a value that determines whether loaded assemblies are ignored by default. This is
-		/// initialized to true, meaning types are non-serializable unless they are in mscorlib or in an
-		/// assembly tagged with <see cref="XMachineAssemblyAttribute"/>. Set this property to false to
+		/// Get or set a value that determines whether unknown assemblies are scanned. This is
+		/// initialized to false, meaning types are non-serializable unless they are in mscorlib or in an
+		/// assembly tagged with <see cref="XMachineAssemblyAttribute"/>. Set this property to true to
 		/// scan all assemblies in the current application domain, allowing all public types to be
 		/// serialized.
 		/// </summary>
 		public static bool ScanUnknownAssemblies
 		{
-			get => ignoreAll;
+			get => scanUnknownAssemblies;
 			set
 			{
 				if (ScanUnknownAssemblies != value)
 				{
-					ignoreAll = value;
+					scanUnknownAssemblies = value;
 					XComponents.ResetAllXDomains();
 				}
 			}

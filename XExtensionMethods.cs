@@ -3,14 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq.Expressions;
-using System.Reflection;
 using System.Xml.Linq;
 using XMachine.Components;
 using XMachine.Components.Collections;
 using XMachine.Components.Constructors;
 using XMachine.Components.Identifiers;
 using XMachine.Components.Properties;
-using XMachine.Reflection;
 
 namespace XMachine
 {
@@ -20,6 +18,16 @@ namespace XMachine
 	public static class XExtensionMethods
 	{
 		private static readonly XName defaultRoot = "xml";
+
+		/// <summary>
+		/// Get an <see cref="XObjectArgs"/> instance.
+		/// </summary>
+		/// <param name="hints">The current <see cref="ObjectHints"/>.</param>
+		/// <returns>An instance of <see cref="XObjectArgs"/>.</returns>
+		public static XObjectArgs ToArgs(this ObjectHints hints) =>
+			hints == ObjectHints.None ? XObjectArgs.Default
+				: (hints == ObjectHints.IgnoreElementName ? XObjectArgs.DefaultIgnoreElementName
+					: new XObjectArgs(hints));
 
 		#region IXComponent
 
@@ -128,7 +136,7 @@ namespace XMachine
 		public static XProperty<TType, TProperty> AddProperty<TType, TProperty>(this XType<TType> xType, XName name,
 			Func<TType, TProperty> get, Action<TType, TProperty> set = null)
 		{
-			XProperty<TType, TProperty> property = new XDelegateProperty<TType, TProperty>(
+			XProperty<TType, TProperty> property = new DelegatedXProperty<TType, TProperty>(
 				name: name ?? throw new ArgumentNullException(nameof(name)),
 				get: get ?? throw new ArgumentNullException(nameof(get)),
 				set: set);
@@ -146,33 +154,8 @@ namespace XMachine
 		/// <param name="set">An optional delegate to override the default set accessor for the member.</param>
 		/// <returns>The new <see cref="XProperty{TType, TProperty}"/>.</returns>
 		public static XProperty<TType, TProperty> AddProperty<TType, TProperty>(this XType<TType> xType,
-			Expression<Func<TType, TProperty>> memberExpression, Action<TType, TProperty> set = null)
-		{
-			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(memberExpression);
-
-			XName name = mi.GetXmlNameFromAttributes() ?? mi.Name;
-			Func<TType, TProperty> get = memberExpression.Compile();
-
-			if (set != null)
-			{
-				if (mi is FieldInfo fi)
-				{
-					set = (obj, value) => fi.SetValue(obj, value);
-				}
-				else if (mi is PropertyInfo pi)
-				{
-					set = (obj, value) => pi.SetValue(obj, value);
-				}
-			}
-
-			XProperty<TType, TProperty> property = new XDelegateProperty<TType, TProperty>(
-					name: mi.GetXmlNameFromAttributes() ?? mi.Name,
-					get: memberExpression.Compile(),
-					set: set);
-
-			xType.Component<XProperties<TType>>().Add(property);
-			return property;
-		}
+			Expression<Func<TType, TProperty>> memberExpression, Action<TType, TProperty> set = null) =>
+			xType.Component<XProperties<TType>>().Add(memberExpression, set);
 
 		/// <summary>
 		/// Instruct the <see cref="XProperties{TType}"/> component to deserialize the given property before construction,

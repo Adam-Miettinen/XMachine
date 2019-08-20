@@ -40,6 +40,7 @@ namespace XMachine.Namers
 				if (name != null)
 				{
 					xName = name;
+
 					Put(type, xName);
 					return xName;
 				}
@@ -87,8 +88,7 @@ namespace XMachine.Namers
 		protected override Type GetType(XElement element, Type expectedType)
 		{
 			if (typesByName.TryGetValue(element.Name, out Type type))
-			{
-				return type;
+			{				return type;
 			}
 
 			type = ParseXName(element.Name);
@@ -131,7 +131,7 @@ namespace XMachine.Namers
 		/// </summary>
 		/// <param name="xName">The <see cref="XName"/> being assigned.</param>
 		/// <param name="type1">The <see cref="Type"/> that is currently assigned <paramref name="xName"/>.</param>
-		/// <param name="type2">The <see cref="Type"/> that has just been resolved to <see cref="xName"/>.</param>
+		/// <param name="type2">The <see cref="Type"/> that has just been resolved to <paramref name="xName"/>.</param>
 		/// <returns>The <see cref="Type"/> object that should be assigned the <see cref="XName"/>, or null if the
 		/// assignment to that <see cref="XName"/> should be removed.</returns>
 		protected virtual Type ResolveCollision(XName xName, Type type1, Type type2)

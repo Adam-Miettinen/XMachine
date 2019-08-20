@@ -24,7 +24,7 @@ namespace XMachine
 
 				if (isInitializedStatic)
 				{
-					foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+					foreach (Assembly assembly in loadedAssemblies)
 					{
 						ScanAssembly(assembly, components.ToArray());
 					}
@@ -48,15 +48,13 @@ namespace XMachine
 		private static readonly object staticLocker = new object();
 		private static bool isInitializedStatic = false;
 
-		private static readonly IList<WeakReference<XDomain>> domains;
-		private static readonly IList<Assembly> loadedAssemblies;
+		private static readonly HashSet<Assembly> loadedAssemblies;
 
 		private static Action<Exception> exceptionHandler;
 
 		static XComponents()
 		{
-			domains = new List<WeakReference<XDomain>>();
-			loadedAssemblies = new List<Assembly>();
+			loadedAssemblies = new HashSet<Assembly>();
 
 			componentManager = new XMachineComponents();
 
@@ -187,15 +185,6 @@ namespace XMachine
 		{
 			InitializeStatic();
 
-			for (int i = 0; i < domains.Count; i++)
-			{
-				if (!domains[i].TryGetTarget(out XDomain _))
-				{
-					domains.RemoveAt(i--);
-				}
-			}
-			domains.Add(new WeakReference<XDomain>(domain));
-
 			foreach (Assembly assembly in loadedAssemblies)
 			{
 				if (IsAssemblyNamerEligible(assembly))
@@ -247,26 +236,19 @@ namespace XMachine
 
 		internal static void ResetAllXDomains()
 		{
-			for (int i = 0; i < domains.Count; i++)
+			foreach (XDomain domain in XDomain.Domains)
 			{
-				if (domains[i].TryGetTarget(out XDomain domain))
-				{
-					domain.Reset();
+				domain.Reset();
 
-					foreach (Assembly assembly in loadedAssemblies)
+				foreach (Assembly assembly in loadedAssemblies)
+				{
+					if (IsAssemblyNamerEligible(assembly))
 					{
-						if (IsAssemblyNamerEligible(assembly))
+						foreach (Type type in GetAssemblyTypes(assembly))
 						{
-							foreach (Type type in GetAssemblyTypes(assembly))
-							{
-								domain.Namer.InspectType(type);
-							}
+							domain.Namer.InspectType(type);
 						}
 					}
-				}
-				else
-				{
-					domains.RemoveAt(i--);
 				}
 			}
 		}
@@ -311,7 +293,12 @@ namespace XMachine
 
 		private static void ScanAssembly(Assembly assembly, IEnumerable<XMachineComponent> components)
 		{
-			loadedAssemblies.Add(assembly);
+			if (assembly.IsDynamic)
+			{
+				return;
+			}
+
+			_ = loadedAssemblies.Add(assembly);
 
 			XMachineAssemblyAttribute attr = assembly.GetCustomAttribute<XMachineAssemblyAttribute>();
 			if (attr != null)
@@ -319,60 +306,51 @@ namespace XMachine
 				XmlTools.SetXMachineAssemblyAttribute(assembly, attr);
 			}
 
-			IEnumerator<Type> typeEnumerator = GetAssemblyTypes(assembly).GetEnumerator();
+			IEnumerable<Type> assemblyTypes = null;
 
 			if (IsAssemblyNamerEligible(assembly))
 			{
+				assemblyTypes = GetAssemblyTypes(assembly);
+
 				// Alert namers
 
-				for (int i = 0; i < domains.Count; i++)
+				foreach (XDomain domain in XDomain.Domains)
 				{
-					if (domains[i].TryGetTarget(out XDomain domain))
+					foreach (Type assemblyType in assemblyTypes)
 					{
-						while (typeEnumerator.MoveNext())
-						{
-							try
-							{
-								domain.Namer.InspectType(typeEnumerator.Current);
-							}
-							catch (Exception e)
-							{
-								ExceptionHandler(e);
-							}
-						}
-						typeEnumerator.Reset();
-					}
-					else
-					{
-						domains.RemoveAt(i--);
+						domain.Namer.InspectType(assemblyType);
 					}
 				}
 			}
 
 			if (components?.Any() == true && IsAssemblyComponentEligible(assembly))
 			{
+				if (assemblyTypes == null)
+				{
+					assemblyTypes = GetAssemblyTypes(assembly);
+				}
+
 				// Alert components
 
 				foreach (XMachineComponent comp in components)
 				{
-					while (typeEnumerator.MoveNext())
+					foreach (Type assemblyType in assemblyTypes)
 					{
 						try
 						{
-							comp.InspectType(typeEnumerator.Current);
+							comp.InspectType(assemblyType);
 						}
 						catch (Exception e)
 						{
-							ExceptionHandler(e);
+							ExceptionHandler(new ComponentException(comp, e));
 						}
 					}
-					typeEnumerator.Reset();
 				}
 			}
 		}
 
 		private static bool IsAssemblyNamerEligible(Assembly assembly) =>
-			!XmlTools.ScanUnknownAssemblies ||
+			XmlTools.ScanUnknownAssemblies ||
 				XmlTools.GetXMachineAssemblyAttribute(assembly) != null ||
 				assembly == typeof(object).Assembly;
 
@@ -387,9 +365,8 @@ namespace XMachine
 			{
 				exportedTypes = assembly.ExportedTypes;
 			}
-			catch (Exception e)
+			catch
 			{
-				ExceptionHandler(e);
 				return Enumerable.Empty<Type>();
 			}
 
@@ -405,9 +382,11 @@ namespace XMachine
 				if (!type.IsArray && !type.IsCOMObject && !type.IsImport && (!type.IsGenericType || type.IsGenericTypeDefinition))
 				{
 					types.Add(type);
-					foreach (Type nestedType in type.GetNestedTypes())
+
+					Type[] nestedTypes = type.GetNestedTypes();
+					for (int i = 0; i < nestedTypes.Length; i++)
 					{
-						AddTypesRecursive(nestedType);
+						AddTypesRecursive(nestedTypes[i]);
 					}
 				}
 			}

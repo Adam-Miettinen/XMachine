@@ -32,8 +32,8 @@ namespace XMachine
 		private static readonly MethodInfo createObjectBuilderMethod = typeof(XReaderImpl)
 			.GetMethod(nameof(CreateObjectBuilderDelegate), BindingFlags.Instance | BindingFlags.NonPublic);
 
-		private readonly IDictionary<Type, Func<Action<object>, object, object>> createObjectBuilderDelegates =
-			new Dictionary<Type, Func<Action<object>, object, object>>();
+		private readonly IDictionary<Type, Func<Action<object>, object>> createObjectBuilderDelegates =
+			new Dictionary<Type, Func<Action<object>, object>>();
 
 		// Task queue
 
@@ -239,25 +239,22 @@ namespace XMachine
 
 			// Move on to advanced reading with ObjectBuilder
 
-			if (!createObjectBuilderDelegates.TryGetValue(box.Type, out Func<Action<object>, object, object> cobDelegate))
+			if (!createObjectBuilderDelegates.TryGetValue(box.Type, out Func<Action<object>, object> cobDelegate))
 			{
-				cobDelegate = (Func<Action<object>, object, object>)createObjectBuilderMethod
+				cobDelegate = (Func<Action<object>, object>)createObjectBuilderMethod
 					.MakeGenericMethod(box.Type)
 					.Invoke(this, null);
 				createObjectBuilderDelegates.Add(box.Type, cobDelegate);
 			}
 
-			// Create the objectbuilder
-
-			object objectBuilder = cobDelegate((obj) =>
+			object objectBuilder = cobDelegate(obj =>
 			{
 				Submit(obj);
 				if (!assign(obj))
 				{
 					AddTask(this, () => assign(obj));
 				}
-			},
-			result);
+			});
 
 			// Invoke XType components that work on object builders
 
