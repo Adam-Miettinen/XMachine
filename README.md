@@ -20,7 +20,7 @@ XMachine expands on .NET's built-in serializer in several ways:
 * You can optionally choose to serialize non-public properties and to use non-public constructors.
 * It is compatible with the standard XML custom attributes (XmlTypeAttribute, XmlAttributeAttribute, XmlElementAttribute).
 * It can read and write objects as references, preserving references between serialized objects and reducing XML file sizes. References can be backward, forward or circular. You can even include references to "contextual objects," objects that don't exist in the XML document but are provided programmatically during serialization and deserialization.
-* You can choose how to handle exceptions via simple `Action<Exception>` delegates. You can use your custom logger, and you won't need any catch statements.
+* You can choose how to handle exceptions via simple `Action<Exception>` delegates. Catch statements are rarely necessary, and you can use a custom logger for debugging.
 * You can control the format in which your XML will be written, such as the element names assigned to object types, which properties are written as attributes, and how collection entries are formatted, all without needing to change your classes or mess them up with custom attributes.
 
 ## Limitations
