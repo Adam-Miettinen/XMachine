@@ -1,7 +1,6 @@
-# XMachine
-> An open-source XML serialization library for .NET Standard 2.0.
+![XMachineSocialCard](https://user-images.githubusercontent.com/51489385/63445850-210fa780-c407-11e9-9f47-e22cf763d7ce.png)
 
-XMachine offers an alternative to the default `System.Xml.Serialization` namespace for .NET developers who want to persist objects in XML format. Its main design goals are flexibility and ease of use: XMachine programmers should be able to code their classes without having to think about the limitations of the serializer.
+XMachine offers an alternative to the default `System.Xml.Serialization` namespace for .NET developers who want to persist objects in XML format. Its main design goals are flexibility, ease of use, and encapsulation: programmers should be able to code their classes without having to spare a thought for the limitations of the serializer.
 
 ## Getting started
 
