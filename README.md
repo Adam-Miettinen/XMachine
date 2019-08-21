@@ -4,7 +4,7 @@ XMachine offers an alternative to the default `System.Xml.Serialization` namespa
 
 ## Getting started
 
-Visit the [wiki](https://github.com/Adam-Miettinen/XMachine/wiki) to learn about the methods and classes available in XMachine. The code itself has fairly complete commenting as well. Start by looking at the static `XmlTools` class: for a simple application, you will only need to interact with a few of its methods.
+Visit the [wiki](https://github.com/Adam-Miettinen/XMachine/wiki) to learn about the methods and classes available in XMachine, or just dive in and follow the code comments. Start by looking at the static `XmlTools` class: for a simple application, you will only need to interact with a few of its methods.
 
 To start programming with XMachine, download and build the source files, then add the built assembly to your project dependencies. XMachine itself has no external dependencies except for .NET Standard 2.0, which is implemented by .NET Core 2.0, .NET Framework 4.6.1 and Mono 5.4. (It will probably work with older versions of .NET Standard, too; let me know how it goes if you try.)
 
