@@ -7,7 +7,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XReadOnlyCollection<T> : XCollection<ReadOnlyCollection<T>, T>
 	{
-		internal XReadOnlyCollection(XType<ReadOnlyCollection<T>> xType) : base(xType) { }
+		public XReadOnlyCollection(XType<ReadOnlyCollection<T>> xType) : base(xType) { }
 
 		protected override void OnInitialized()
 		{

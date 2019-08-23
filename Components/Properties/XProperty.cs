@@ -9,6 +9,16 @@ namespace XMachine.Components.Properties
 	public abstract class XProperty<TType, TProperty>
 	{
 		/// <summary>
+		/// Create a new <see cref="XProperty{TType, TProperty}"/> from the given name and accessors.
+		/// </summary>
+		/// <param name="name">A unique <see cref="XName"/> for the property.</param>
+		/// <param name="get">A delegate to get the property's value from a <typeparamref name="TType"/>.</param>
+		/// <param name="set">An optional delegate to set the property's value on a <typeparamref name="TType"/>.</param>
+		/// <returns>A new instance of <see cref="XProperty{TType, TProperty}"/>.</returns>
+		public static XProperty<TType, TProperty> Create(XName name, Func<TType, TProperty> get, Action<TType, TProperty> set = null) =>
+			new DelegatedXProperty<TType, TProperty>(name, get, set);
+
+		/// <summary>
 		/// Create an <see cref="XProperty{TType, TProperty}"/>.
 		/// </summary>
 		/// <param name="name">The <see cref="XName"/> to assign to <see cref="Name"/>.</param>

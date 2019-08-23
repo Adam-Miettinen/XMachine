@@ -5,7 +5,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XIList<T> : XCollection<T> where T : IList
 	{
-		internal XIList(XType<T> xType) : base(xType) { }
+		public XIList(XType<T> xType) : base(xType) { }
 
 		protected override Type ItemType => typeof(object);
 

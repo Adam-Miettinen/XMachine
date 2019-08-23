@@ -6,7 +6,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XStack<TStack, TItem> : XCollection<TStack, TItem> where TStack : Stack<TItem>
 	{
-		internal XStack(XType<TStack> xType) : base(xType) { }
+		public XStack(XType<TStack> xType) : base(xType) { }
 
 		protected override void AddItem(TStack collection, int index, TItem item) => collection.Push(item);
 

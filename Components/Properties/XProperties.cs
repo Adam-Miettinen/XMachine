@@ -40,17 +40,65 @@ namespace XMachine.Components.Properties
 		{
 			if (property == null)
 			{
-				throw new ArgumentNullException("Cannot add null property");
+				throw new ArgumentNullException(nameof(property));
 			}
 			if (property.Name == null)
 			{
-				throw new ArgumentException("Property must have a valid XName");
+				throw new ArgumentException("Must have a valid XName", nameof(property));
 			}
 			if (properties.ContainsKey(property.Name))
 			{
-				throw new ArgumentException($"Component already has a property with XName {property.Name}.");
+				throw new ArgumentException($"A property with XName {property.Name} already exists.", nameof(property));
 			}
 			properties.Add(property.Name, XPropertyBox<TType>.Box(property));
+		}
+
+		/// <summary>
+		/// Add a new <see cref="XProperty{TType, TProperty}"/> representing the member identified by the
+		/// given expression.
+		/// </summary>
+		/// <param name="expression">A <see cref="MemberExpression"/> identifying a field or property.</param>
+		/// <param name="set">An optional delegate to override the default set accessor for the member.</param>
+		/// <returns>The newly-created <see cref="XProperty{TType, TProperty}"/>.</returns>
+		public XProperty<TType, TProperty> Add<TProperty>(Expression<Func<TType, TProperty>> expression, 
+			Action<TType, TProperty> set = null)
+		{
+			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(expression);
+
+			if (mi == null)
+			{
+				throw new ArgumentException(
+					$"Expression {expression} does not define a member of {typeof(TType).Name}",
+					nameof(expression));
+			}
+
+			XName name = mi.GetXmlNameFromAttributes() ?? mi.Name;
+
+			if (properties.ContainsKey(name))
+			{
+				throw new ArgumentException($"A property with XName {name} already exists.", nameof(expression));
+			}
+
+			if (set == null)
+			{
+				if (mi is FieldInfo fi)
+				{
+					set = (obj, value) => fi.SetValue(obj, value);
+				}
+				else
+				{
+					PropertyInfo pi = (PropertyInfo)mi;
+					set = (obj, value) => pi.SetValue(obj, value);
+				}
+			}
+
+			XProperty<TType, TProperty> property = new DelegatedXProperty<TType, TProperty>(
+				name: name,
+				get: expression.Compile(),
+				set: set);
+			properties.Add(property.Name, XPropertyBox<TType>.Box(property));
+
+			return property;
 		}
 
 		/// <summary>
@@ -144,7 +192,7 @@ namespace XMachine.Components.Properties
 		public void ConstructWith<TArg1>(Expression<Func<TType, TArg1>> expression1,
 			Func<TArg1, TType> constructor = null)
 		{
-			XName arg1 = Get(expression1)?.Name;
+			XName arg1 = GetOrAdd(expression1)?.Name;
 			if (arg1 == null)
 			{
 				throw new ArgumentException($"The given expression does not identify a property on the {nameof(XType<TType>)}.");
@@ -213,7 +261,8 @@ namespace XMachine.Components.Properties
 			Expression<Func<TType, TArg2>> expression2,
 			Func<TArg1, TArg2, TType> constructor = null)
 		{
-			XName arg1 = Get(expression1)?.Name, arg2 = Get(expression2)?.Name;
+			XName arg1 = GetOrAdd(expression1)?.Name, 
+				arg2 = GetOrAdd(expression2)?.Name;
 			if (arg1 == null || arg2 == null)
 			{
 				throw new ArgumentException($"The given expression does not identify a property on the {nameof(XType<TType>)}.");
@@ -291,9 +340,9 @@ namespace XMachine.Components.Properties
 			Expression<Func<TType, TArg3>> expression3,
 			Func<TArg1, TArg2, TArg3, TType> constructor = null)
 		{
-			XName arg1 = Get(expression1)?.Name,
-				arg2 = Get(expression2)?.Name,
-				arg3 = Get(expression3)?.Name;
+			XName arg1 = GetOrAdd(expression1)?.Name,
+				arg2 = GetOrAdd(expression2)?.Name,
+				arg3 = GetOrAdd(expression3)?.Name;
 
 			if (arg1 == null || arg2 == null || arg3 == null)
 			{
@@ -382,10 +431,10 @@ namespace XMachine.Components.Properties
 			Expression<Func<TType, TArg4>> expression4,
 			Func<TArg1, TArg2, TArg3, TArg4, TType> constructor = null)
 		{
-			XName property1 = Get(expression1)?.Name,
-				property2 = Get(expression2)?.Name,
-				property3 = Get(expression3)?.Name,
-				property4 = Get(expression4)?.Name;
+			XName property1 = GetOrAdd(expression1)?.Name,
+				property2 = GetOrAdd(expression2)?.Name,
+				property3 = GetOrAdd(expression3)?.Name,
+				property4 = GetOrAdd(expression4)?.Name;
 
 			if (property1 == null || property2 == null || property3 == null || property4 == null)
 			{
@@ -718,12 +767,17 @@ namespace XMachine.Components.Properties
 
 						foreach (XName ppty in keysToSet)
 						{
+							XPropertyBox<TType> box = properties[ppty];
 							object value = propertyValues[ppty];
+
 							if (!ReferenceEquals(value, XmlTools.PlaceholderObject))
 							{
 								try
 								{
-									properties[ppty].Set(objectBuilder.Object, value);
+									if (box.WithArgs?.Hints.HasFlag(ObjectHints.ConstructedByOwner) != true)
+									{
+										properties[ppty].Set(objectBuilder.Object, value);
+									}
 								}
 								finally
 								{
@@ -773,6 +827,52 @@ namespace XMachine.Components.Properties
 			}
 
 			return false;
+		}
+
+		private XProperty<TType, TProperty> GetOrAdd<TProperty>(Expression<Func<TType, TProperty>> expression)
+		{
+			MemberInfo mi = ReflectionTools.ParseFieldOrPropertyExpression(expression);
+
+			if (mi != null)
+			{
+				XName name = mi.GetXmlNameFromAttributes() ?? mi.Name;
+
+				// Try to get
+
+				if (properties.TryGetValue(name, out XPropertyBox<TType> existing))
+				{
+					XProperty<TType, TProperty> unboxed = XPropertyBox<TType>.Unbox<TProperty>(existing);
+					if (unboxed != null)
+					{
+						return unboxed;
+					}
+				}
+
+				// Try to add
+
+				Action<TType, TProperty> set;
+				if (mi is FieldInfo fi)
+				{
+					set = (obj, value) => fi.SetValue(obj, value);
+				}
+				else
+				{
+					PropertyInfo pi = (PropertyInfo)mi;
+					set = (obj, value) => pi.SetValue(obj, value);
+				}
+
+				XProperty<TType, TProperty> property = new DelegatedXProperty<TType, TProperty>(
+					name: name,
+					get: expression.Compile(),
+					set: set);
+				properties.Add(property.Name, XPropertyBox<TType>.Box(property));
+
+				return property;
+			}
+
+			throw new ArgumentException(
+				$"Expression {expression} does not define a member of {typeof(TType).Name}",
+				nameof(expression));
 		}
 
 		private XPropertyBox<TType> AddAutoProperty(PropertyInfo pi) =>

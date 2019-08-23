@@ -8,7 +8,7 @@ namespace XMachine.Components.Collections
 	internal sealed class XReadOnlyDictionary<TKey, TValue> :
 		XCollection<ReadOnlyDictionary<TKey, TValue>, KeyValuePair<TKey, TValue>>
 	{
-		internal XReadOnlyDictionary(XType<ReadOnlyDictionary<TKey, TValue>> xType) : base(xType) { }
+		public XReadOnlyDictionary(XType<ReadOnlyDictionary<TKey, TValue>> xType) : base(xType) { }
 
 		protected override void OnInitialized()
 		{

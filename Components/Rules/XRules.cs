@@ -202,8 +202,20 @@ namespace XMachine.Components.Rules
 					if (parameters.Length == 1 &&
 						parameters[0].ParameterType == typeof(XDomain))
 					{
-						staticDomainRules.Add((Action<XDomain>)Delegate.CreateDelegate(typeof(Action<XDomain>), method));
+						Action<XDomain> newDomainRule = (Action<XDomain>)Delegate.CreateDelegate(typeof(Action<XDomain>), method);
+
+						staticDomainRules.Add(newDomainRule);
+
+						foreach (XDomain domain in XDomain.Domains)
+						{
+							newDomainRule(domain);
+						}
 					}
+				}
+				else if (method.HasCustomAttribute<XMachineRuleAttribute>() &&
+					method.GetParameters().Length == 0)
+				{
+					_ = method.Invoke(null, null);
 				}
 			}
 		}

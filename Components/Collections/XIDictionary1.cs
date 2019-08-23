@@ -5,7 +5,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XIDictionary<T> : XCollection<T> where T : IDictionary
 	{
-		internal XIDictionary(XType<T> xType) : base(xType) { }
+		public XIDictionary(XType<T> xType) : base(xType) { }
 
 		protected override Type ItemType => typeof(DictionaryEntry);
 

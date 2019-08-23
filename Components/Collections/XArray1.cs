@@ -7,7 +7,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XArray1<T> : XCollection<T[], T>
 	{
-		internal XArray1(XType<T[]> xType) : base(xType) { }
+		public XArray1(XType<T[]> xType) : base(xType) { }
 
 		protected override void AddItem(T[] collection, int index, T item) =>
 			collection.SetValue(item, collection.GetLowerBound(0) + index);

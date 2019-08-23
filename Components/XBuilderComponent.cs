@@ -7,7 +7,7 @@ namespace XMachine.Components
 	{
 		private XBuilder<T> builder;
 
-		internal XBuilderComponent(XType<T> xType, XBuilder<T> builder) : base(xType) =>
+		public XBuilderComponent(XType<T> xType, XBuilder<T> builder) : base(xType) =>
 			Builder = builder;
 
 		internal XBuilder<T> Builder

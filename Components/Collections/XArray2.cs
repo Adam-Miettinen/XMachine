@@ -5,7 +5,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XArray2<T> : XCollection<T[,]>
 	{
-		internal XArray2(XType<T[,]> xType) : base(xType) { }
+		public XArray2(XType<T[,]> xType) : base(xType) { }
 
 		protected override Type ItemType => throw new NotImplementedException();
 

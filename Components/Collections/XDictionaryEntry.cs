@@ -5,7 +5,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XDictionaryEntry : XBuilder<DictionaryEntry>
 	{
-		internal XDictionaryEntry() { }
+		public XDictionaryEntry() { }
 
 		protected override void OnBuild(XType<DictionaryEntry> xType, IXReadOperation reader,
 			XElement element, ObjectBuilder<DictionaryEntry> objectBuilder, XObjectArgs args)

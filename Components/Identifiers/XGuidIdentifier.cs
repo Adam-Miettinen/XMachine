@@ -8,9 +8,6 @@ namespace XMachine.Components.Identifiers
 	/// <typeparamref name="T"/> a probably-unique <see cref="Guid"/> that is generated from the object's 
 	/// runtime type, its hashcode, the current time in ticks, and a random integer. A <see cref="Guid"/> 
 	/// appears in XML as a 32-digit integer.<br />
-	/// <see cref="XGuidIdentifier{T}"/> stores a mapping between objects and assigned IDs internally. You 
-	/// must call the <see cref="Reset"/> method after each read/write operation if you plan to re-use 
-	/// <see cref="XGuidIdentifier{T}"/> across multiple operations.
 	/// </summary>
 	public sealed class XGuidIdentifier<T> : XIdentifier<T, Guid> where T : class
 	{
@@ -32,7 +29,7 @@ namespace XMachine.Components.Identifiers
 		/// if necessary.
 		/// </summary>
 		/// <param name="obj">The object to be ID'd.</param>
-		/// <returns>An existing or new <see cref="Guid"/>.</returns>
+		/// <returns>An existing or new <see cref="Guid"/>. If <paramref name="obj"/> is null, returns <see cref="Guid.Empty"/>.</returns>
 		public override Guid GetId(T obj)
 		{
 			if (obj == null)
@@ -46,7 +43,7 @@ namespace XMachine.Components.Identifiers
 
 			byte[] bytes = new byte[16];
 
-			// Use all 4 bytes of the hashcode
+			// Use all 4 bytes of the hashcode (=4 bytes)
 
 			int hash = obj.GetHashCode();
 			bytes[0] = (byte)hash;
@@ -54,7 +51,7 @@ namespace XMachine.Components.Identifiers
 			bytes[2] = (byte)(hash >> 16);
 			bytes[3] = (byte)(hash >> 24);
 
-			// Use the smallest 4 bytes of the current ticks (8 bytes)
+			// Use the smallest 4 bytes of the current ticks (=8 bytes)
 
 			long time = DateTime.Now.Ticks;
 			bytes[4] = (byte)time;
@@ -62,15 +59,16 @@ namespace XMachine.Components.Identifiers
 			bytes[6] = (byte)(time >> 16);
 			bytes[7] = (byte)(time >> 24);
 
-			// Use all 4 bytes of a random integer (12 bytes)
+			// Use all 4 bytes of a random integer (=12 bytes)
 
-			int rand = randomizer.Next();
-			bytes[8] = (byte)rand;
-			bytes[9] = (byte)(rand >> 8);
-			bytes[10] = (byte)(rand >> 16);
-			bytes[11] = (byte)(rand >> 24);
+			byte[] randBytes = new byte[4];
+			randomizer.NextBytes(randBytes);
+			bytes[8] = randBytes[0];
+			bytes[9] = randBytes[1];
+			bytes[10] = randBytes[2];
+			bytes[11] = randBytes[3];
 
-			// Use all 4 bytes of the runtime type's hash (16 bytes)
+			// Use all 4 bytes of the runtime type's hash (=16 bytes=128 bits=1 GUID)
 
 			int typeHash = obj.GetType().GetHashCode();
 			bytes[0] = (byte)typeHash;

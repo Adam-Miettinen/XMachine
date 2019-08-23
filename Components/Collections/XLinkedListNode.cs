@@ -5,7 +5,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XLinkedListNode<T> : XTypeComponent<LinkedListNode<T>>
 	{
-		internal XLinkedListNode(XType<LinkedListNode<T>> xType) : base(xType) { }
+		public XLinkedListNode(XType<LinkedListNode<T>> xType) : base(xType) { }
 
 		protected override void OnBuild(IXReadOperation reader, XElement element, ObjectBuilder<LinkedListNode<T>> objectBuilder,
 			XObjectArgs args) =>

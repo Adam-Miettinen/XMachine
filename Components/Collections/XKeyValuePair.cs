@@ -5,7 +5,7 @@ namespace XMachine.Components.Collections
 {
 	internal sealed class XKeyValuePair<TKey, TValue> : XBuilder<KeyValuePair<TKey, TValue>>
 	{
-		internal XKeyValuePair() { }
+		public XKeyValuePair() { }
 
 		protected override void OnBuild(XType<KeyValuePair<TKey, TValue>> xType, IXReadOperation reader,
 			XElement element, ObjectBuilder<KeyValuePair<TKey, TValue>> objectBuilder, XObjectArgs args)

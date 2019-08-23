@@ -5,7 +5,6 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
-using XMachine.Components.Properties;
 using XMachine.Reflection;
 
 namespace XMachine.Components.Collections
@@ -17,10 +16,6 @@ namespace XMachine.Components.Collections
 	/// </summary>
 	public sealed class XAutoCollections : XMachineComponent
 	{
-		private static readonly MethodInfo dictionaryConstructor = typeof(XAutoCollections)
-			.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
-			.FirstOrDefault(x => x.Name == nameof(DictionaryConstructor) && x.IsGenericMethodDefinition);
-
 		private XName itemName, keyName, valueName, arrayLowerBoundName;
 
 		internal XAutoCollections() { }
@@ -76,7 +71,7 @@ namespace XMachine.Components.Collections
 			{
 				xType.Register((XTypeComponent<T>)typeof(XBuilderComponent<>)
 					.MakeGenericType(type)
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetConstructors()
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
@@ -101,7 +96,7 @@ namespace XMachine.Components.Collections
 			{
 				xType.Register((XTypeComponent<T>)typeof(XReadOnlyDictionary<,>)
 					.MakeGenericType(typeArgs)
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetConstructors()
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
@@ -116,7 +111,7 @@ namespace XMachine.Components.Collections
 			{
 				xType.Register((XTypeComponent<T>)typeof(XReadOnlyCollection<>)
 					.MakeGenericType(typeArgs)
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetConstructors()
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
@@ -131,7 +126,7 @@ namespace XMachine.Components.Collections
 			{
 				xType.Register((XTypeComponent<T>)typeof(XLinkedListNode<>)
 					.MakeGenericType(typeArgs)
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetConstructors()
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
@@ -160,7 +155,7 @@ namespace XMachine.Components.Collections
 				{
 					xType.Register((XTypeComponent<T>)arrayCompType
 						.MakeGenericType(type.GetElementType())
-						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+						.GetConstructors()
 						.FirstOrDefault()
 						.Invoke(new object[]
 						{
@@ -183,7 +178,7 @@ namespace XMachine.Components.Collections
 					Type[] dictArgs = dictType.GenericTypeArguments;
 					xType.Register((XTypeComponent<T>)typeof(XIDictionary<,,>)
 						.MakeGenericType(type, dictArgs[0], dictArgs[1])
-						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+						.GetConstructors()
 						.FirstOrDefault()
 						.Invoke(new object[]
 						{
@@ -199,7 +194,7 @@ namespace XMachine.Components.Collections
 			{
 				xType.Register((XTypeComponent<T>)typeof(XIDictionary<>)
 					.MakeGenericType(type)
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetConstructors()
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
@@ -219,7 +214,7 @@ namespace XMachine.Components.Collections
 				{
 					xType.Register((XTypeComponent<T>)typeof(XICollection<,>)
 						.MakeGenericType(type, itemType)
-						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+						.GetConstructors()
 						.FirstOrDefault()
 						.Invoke(new object[]
 						{
@@ -235,7 +230,7 @@ namespace XMachine.Components.Collections
 			{
 				xType.Register((XTypeComponent<T>)typeof(XIList<>)
 					.MakeGenericType(type)
-					.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetConstructors()
 					.FirstOrDefault()
 					.Invoke(new object[]
 					{
@@ -255,7 +250,7 @@ namespace XMachine.Components.Collections
 				{
 					xType.Register((XTypeComponent<T>)typeof(XQueue<,>)
 						.MakeGenericType(type, queueType.GenericTypeArguments[0])
-						.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+						.GetConstructors()
 						.FirstOrDefault()
 						.Invoke(new object[]
 						{
@@ -274,7 +269,7 @@ namespace XMachine.Components.Collections
 					{
 						xType.Register((XTypeComponent<T>)typeof(XStack<,>)
 							.MakeGenericType(type, stackType.GenericTypeArguments[0])
-							.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+							.GetConstructors()
 							.FirstOrDefault()
 							.Invoke(new object[]
 							{
@@ -297,34 +292,6 @@ namespace XMachine.Components.Collections
 					collection.Enabled = false;
 				}
 			}
-
-			Type type = typeof(T);
-			Type typeDefinition = type.IsGenericType ? type.GetGenericTypeDefinition() : null;
-			Type[] typeArgs = type.IsGenericType ? type.GenericTypeArguments : null;
-
-			// Dictionary<,> constructor
-
-			if (typeDefinition == typeof(Dictionary<,>))
-			{
-				_ = dictionaryConstructor.MakeGenericMethod(typeArgs).Invoke(this, new object[] { xType });
-			}
-		}
-
-		private void DictionaryConstructor<TKey, TValue>(XType<Dictionary<TKey, TValue>> xType)
-		{
-			XProperty<Dictionary<TKey, TValue>, IEqualityComparer<TKey>> property =
-				new XDelegateProperty<Dictionary<TKey, TValue>, IEqualityComparer<TKey>>(
-					name: nameof(Dictionary<TKey, TValue>.Comparer),
-					get: x => x.Comparer)
-				{
-					WriteIf = x => !Equals(x.Comparer, EqualityComparer<TKey>.Default)
-				};
-
-			xType.Component<XProperties<Dictionary<TKey, TValue>>>().Add(property);
-
-			xType.Component<XProperties<Dictionary<TKey, TValue>>>().ConstructWith(
-				expression1: x => x.Comparer,
-				constructor: (arg1) => new Dictionary<TKey, TValue>(arg1));
 		}
 	}
 }
