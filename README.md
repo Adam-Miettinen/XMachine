@@ -25,7 +25,7 @@ XMachine expands on .NET's built-in serializer in several ways:
 
 ## Limitations
 
-* XMachine does not use reflection emit or dynamic assemblies. It has to run in an application domain with sufficient reflection permissions.
+* Any serialization of nonpublic members must happen in a trust environment with sufficient permissions.
 * It does not support encryption/decryption.
 * It cannot (automatically) serialize `ref readonly struct` types.
 
